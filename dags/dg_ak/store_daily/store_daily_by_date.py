@@ -10,8 +10,8 @@ import pandas as pd
 from functools import partial
 
 from psycopg2 import sql
-from dg_ak.utils import UtilTools as ut
-from dg_ak.util_funcs import UtilFuncs as uf
+from dg_ak.utils.utils import UtilTools as ut
+from dg_ak.store_daily.util_funcs import UtilFuncs as uf
 
 from airflow.exceptions import AirflowException
 from airflow.models.dag import DAG

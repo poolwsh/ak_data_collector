@@ -1,4 +1,4 @@
-from dg_ak.singleton import singleton
+from dg_ak.utils.singleton import singleton
 import os
 import threading
 import logging

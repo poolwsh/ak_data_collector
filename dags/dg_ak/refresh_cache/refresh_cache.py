@@ -9,7 +9,7 @@ from functools import partial
 from sqlalchemy import create_engine
 
 
-from dg_ak.util_funcs import UtilFuncs as uf
+from dg_ak.store_daily.util_funcs import UtilFuncs as uf
 
 from airflow.models.dag import DAG
 from airflow.operators.python import PythonOperator, ExternalPythonOperator

@@ -1,7 +1,7 @@
 ##########################################
 ### test
-import sys
-sys.path.append('/data/workspace/git/ak_data_collector/dags')
+# import sys
+# sys.path.append('/data/workspace/git/ak_data_collector/dags')
 #######################################
 
 import os
@@ -14,8 +14,8 @@ from io import BytesIO
 from datetime import date, datetime, timedelta
 from typing import Optional, Union
 
-from dg_ak.utils import UtilTools as ut
-from dg_ak.logger import LogHelper
+from dg_ak.utils.utils import UtilTools as ut
+from dg_ak.utils.logger import LogHelper
 
 from airflow.exceptions import AirflowException
 
