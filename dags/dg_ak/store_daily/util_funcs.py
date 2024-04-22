@@ -31,6 +31,7 @@ class UtilFuncs(object):
         _date_df = UtilFuncs.read_df_from_redis(redis_key, redis_conn)
 
         _date_list = [ut.format_td8(date) for date in _date_df['Date'].sort_values(ascending=False).tolist()]
+        logger.debug(f"date_list:{_date_list}")
         _ak_data_df = UtilFuncs.get_data_by_td_list(ak_func_name, _date_list)
         _desired_columns = UtilFuncs.get_columns_from_table(pg_conn, _table_name)
         _ak_data_df = _ak_data_df[_desired_columns]
@@ -177,6 +178,7 @@ class UtilFuncs(object):
             _data_json = df.to_json(date_format='iso')
             conn.setex(key, ttl, _data_json)
             logger.info(f"DataFrame written to Redis under key: {key} with TTL {ttl} seconds.")
+            logger.debug(f"_data_json:{_data_json}")
         except Exception as e:
             error_msg = f"Error writing DataFrame to Redis for key: {key}. Traceback: {traceback.format_exc()}"
             logger.error(error_msg)
@@ -260,21 +262,25 @@ class UtilFuncs(object):
         end_str = end_date.strftime('%Y-%m-%d')
 
         all_date_list = UtilFuncs.generate_date_list(begin, end_str, ascending=False)
+        logger.debug(f"in func 'get_date_list', all_date_list[:30]:{all_date_list[:30]}")
         current_df = UtilFuncs.get_tracing_by_date(pg_conn, key)
+        logger.debug(f"in func 'get_date_list', current_df.head(10):{current_df.head(10)}")
         
         if not current_df.empty:
-            current_date_list = current_df['dt'].tolist()
+            current_date_list = current_df['dt'].apply(ut.format_td10).tolist()
+            logger.debug(f"in func 'get_date_list', current_date_list[:30]:{current_date_list[:30]}")
         else:
             current_date_list = []
 
         missing_date_list = [td for td in all_date_list if td not in current_date_list]
+        logger.debug(f"in func 'get_date_list', missing_date_list:{missing_date_list}")
 
         return sorted(missing_date_list, reverse=True)
 
     @staticmethod
     def get_tracing_by_date(pg_conn, key):
         sql = """
-        SELECT ak_func_name, dt, hash_value, create_time, update_time, host_name
+        SELECT ak_func_name, dt, create_time, update_time, category, is_active, host_name
         FROM dg_ak_tracing_dt
         WHERE ak_func_name = %s;
         """
@@ -288,8 +294,8 @@ class UtilFuncs(object):
             df = pd.DataFrame(
                 rows, 
                 columns=[
-                    'ak_func_name', 'dt', 'hash_value', 
-                    'create_time', 'update_time', 'host_name'
+                    'ak_func_name', 'dt', 'create_time', 'update_time', 
+                    'category', 'is_active', 'host_name'
                     ])
             return df
         finally:
@@ -317,4 +323,4 @@ class UtilFuncs(object):
 
 
 # print(UtilFuncs.generate_dt_list('2024-04-01','2024-04-10',dt_format='%Y%m%d'))
-################################################3##
+##################################################
