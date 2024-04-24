@@ -4,8 +4,8 @@ import os
 import socket
 from datetime import datetime, timedelta
 import pandas as pd
-from dg_ak.store_daily.util_funcs import UtilFuncs as uf
-from dg_ak.utils.logger import LogHelper
+from dags.dg_ak.utils.util_funcs import UtilFuncs as uf
+from dg_ak.utils.logger import logger
 
 from airflow.exceptions import AirflowException
 from airflow.models.dag import DAG
@@ -13,7 +13,6 @@ from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.redis.hooks.redis import RedisHook
 from airflow.utils.dates import days_ago
-
 
 POSTGRES_CONN_ID = "local_pgsql"
 TXY800_PGSQL_CONN_ID = "txy800_pgsql_ak"
@@ -23,7 +22,6 @@ redis_hook = RedisHook(redis_conn_id=REDIS_CONN_ID)
 pgsql_hook = PostgresHook(postgres_conn_id=TXY800_PGSQL_CONN_ID)
 pg_conn = pgsql_hook.get_conn()
 
-logger = LogHelper().logger
 
 # region 涨跌停
 def get_tracing_data(ti, ak_func_name: str):

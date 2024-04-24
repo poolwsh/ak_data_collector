@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import timedelta
-from dg_ak.store_daily.util_funcs import UtilFuncs as uf
+from dags.dg_ak.utils.util_funcs import UtilFuncs as uf
 from dg_ak.utils.logger import logger
 import dg_ak.utils.config as con
 
