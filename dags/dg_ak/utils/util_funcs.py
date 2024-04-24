@@ -1,7 +1,7 @@
 ##########################################
 ### test
-# import sys
-# sys.path.append('/data/workspace/git/ak_data_collector/dags')
+import sys
+sys.path.append('/data/workspace/git/ak_data_collector/dags')
 #######################################
 
 import os
@@ -14,6 +14,7 @@ from io import BytesIO
 from datetime import date, datetime, timedelta
 from typing import Optional, Union
 
+import dg_ak.utils.config as con
 from dg_ak.utils.utils import UtilTools as ut
 from dg_ak.utils.logger import LogHelper
 
@@ -23,6 +24,32 @@ logger = LogHelper().logger
 
 class UtilFuncs(object):
     default_redis_ttl = 60*60 # 1 hour
+
+    # region stock funcs
+    def get_s_code_list(redis_conn: redis.Redis, ttl: int = default_redis_ttl):
+        try:
+            _df = UtilFuncs.read_df_from_redis(con.STOCK_A_REALTIME_KEY, redis_conn)
+            logger.info('Read stock real-time data from Redis successfully.')
+            return _df['s_code']
+        except Exception as e:
+            logger.warning(f"Failed to read stock real-time data from Redis: {e}")
+            try:
+                _df = getattr(ak, 'stock_zh_a_spot_em')()
+                if _df is not None and '代码' in _df.columns:
+                    _df.rename(columns={'代码': 's_code'}, inplace=True)
+                    _df['s_code'] = _df['s_code'].astype(str)
+                    UtilFuncs.write_df_to_redis(con.STOCK_A_REALTIME_KEY, _df, redis_conn, ttl)
+                    return _df['s_code']
+                else:
+                    logger.error("Failed to fetch or process data from the source.")
+                    return pd.Series()  # 返回一个空的序列以避免进一步错误
+            except Exception as inner_e:
+                logger.error(f"Error while fetching or writing data: {inner_e}")
+                raise  # 可能需要重新抛出异常或处理错误
+        
+    def get_s_code_hist():
+        raise NotImplementedError
+    # endregion stock funcs
 
     # region tool funcs
     @staticmethod
@@ -41,7 +68,6 @@ class UtilFuncs(object):
         _ak_data_df.to_csv(_temp_csv_path, index=False, header=False)
 
         return _temp_csv_path
-
 
     @staticmethod
     def get_columns_from_table(pg_conn, table_name):
@@ -178,7 +204,7 @@ class UtilFuncs(object):
             _data_json = df.to_json(date_format='iso')
             conn.setex(key, ttl, _data_json)
             logger.info(f"DataFrame written to Redis under key: {key} with TTL {ttl} seconds.")
-            logger.debug(f"_data_json:{_data_json}")
+            # logger.debug(f"_data_json:{_data_json}")
         except Exception as e:
             error_msg = f"Error writing DataFrame to Redis for key: {key}. Traceback: {traceback.format_exc()}"
             logger.error(error_msg)
@@ -190,7 +216,8 @@ class UtilFuncs(object):
             _data_json = conn.get(key)
             if _data_json:
                 _data_json = _data_json.decode('utf-8') if isinstance(_data_json, bytes) else _data_json
-                _df = pd.read_json(BytesIO(_data_json.encode()))
+                dtype_spec = {col: str for col in con.POSSIBLE_CODE_COLUMNS} 
+                _df = pd.read_json(BytesIO(_data_json.encode()), dtype=dtype_spec)
                 logger.info(f"DataFrame read from Redis for key: {key}")
                 return _df
             else:
@@ -320,7 +347,10 @@ class UtilFuncs(object):
 # df = UtilFuncs.get_data_by_td('stock_zt_pool_em', '20240402')
 # print(df.columns)
 # print(df.head(3))
-
-
+from airflow.providers.redis.hooks.redis import RedisHook
+REDIS_CONN_ID = "local_redis_3"
+redis_hook = RedisHook(redis_conn_id=REDIS_CONN_ID)
+s_code_list = UtilFuncs.get_s_code_list(redis_hook.get_conn())
+print(s_code_list)
 # print(UtilFuncs.generate_dt_list('2024-04-01','2024-04-10',dt_format='%Y%m%d'))
 ##################################################
