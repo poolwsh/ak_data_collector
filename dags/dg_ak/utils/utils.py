@@ -133,16 +133,18 @@ class UtilTools(object):
         return [_num for _num in _fib_sequence if min_val <= _num <= max_val]
 
     @staticmethod
-    def get_col_dict(ak_func_name: str) -> dict:
+    def get_col_dict(ak_func_json: str) -> dict:
         removed_elements_list = UtilTools.remove_elements(
-            ak_cols_config[ak_func_name]["remove_list"], 
-            ak_cols_config[ak_func_name]["org_list"]
+            ak_func_json["remove_list"], 
+            ak_func_json["org_list"]
         )
-        return dict(zip(removed_elements_list, ak_cols_config[ak_func_name]["en_list"]))
+        return dict(zip(removed_elements_list, ak_func_json["en_list"]))
 
     @staticmethod
-    def remove_cols(df: pd.DataFrame, ak_func_name: str) -> pd.DataFrame:
-        return df.drop(ak_cols_config[ak_func_name]["remove_list"], axis=1, inplace=False)
+    def remove_cols(df: pd.DataFrame, ak_func_json: str) -> pd.DataFrame:
+        if ak_func_json["remove_list"] > 0:
+            return df.drop(ak_func_json["remove_list"], axis=1, inplace=False)
+        return df
 
     @staticmethod
     def add_td(df: pd.DataFrame, td:any) -> pd.DataFrame:
