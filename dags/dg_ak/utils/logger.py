@@ -1,9 +1,17 @@
-from dg_ak.utils.singleton import singleton
+
 import os
 import threading
 import logging
-import logging.handlers
 from logging.handlers import RotatingFileHandler
+
+# 实现 singleton 装饰器
+def singleton(cls, *args, **kw):
+    instances = {}
+    def _singleton():
+        if cls not in instances:
+            instances[cls] = cls(*args, **kw)
+        return instances[cls]
+    return _singleton
 
 log_root_dir = '/data/workspace/log/default'
 
@@ -81,22 +89,4 @@ class MQLogger(object):
         # self.logger = PalsurClient('log')
         pass
 
-
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+logger = LogHelper().logger
