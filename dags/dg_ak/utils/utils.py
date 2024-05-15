@@ -133,7 +133,7 @@ class UtilTools(object):
         return [_num for _num in _fib_sequence if min_val <= _num <= max_val]
 
     @staticmethod
-    def get_col_dict(ak_func_json: str) -> dict:
+    def get_col_dict(ak_func_json: dict) -> dict:
         removed_elements_list = UtilTools.remove_elements(
             ak_func_json["remove_list"], 
             ak_func_json["org_list"]
@@ -141,8 +141,8 @@ class UtilTools(object):
         return dict(zip(removed_elements_list, ak_func_json["en_list"]))
 
     @staticmethod
-    def remove_cols(df: pd.DataFrame, ak_func_json: str) -> pd.DataFrame:
-        if ak_func_json["remove_list"] > 0:
+    def remove_cols(df: pd.DataFrame, ak_func_json: dict) -> pd.DataFrame:
+        if len(ak_func_json["remove_list"]) > 0:
             return df.drop(ak_func_json["remove_list"], axis=1, inplace=False)
         return df
 

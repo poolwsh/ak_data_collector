@@ -16,16 +16,15 @@ from typing import Optional, Union
 
 import dg_ak.utils.config as con
 from dg_ak.utils.utils import UtilTools as ut
-from dg_ak.utils.logger import LogHelper
+from dg_ak.utils.logger import logger
 
 from airflow.exceptions import AirflowException
-
-logger = LogHelper().logger
 
 class UtilFuncs(object):
     default_redis_ttl = 60*60 # 1 hour
 
     # region stock funcs
+    @staticmethod
     def get_s_code_list(redis_conn: redis.Redis, ttl: int = default_redis_ttl):
         try:
             _df = UtilFuncs.read_df_from_redis(con.STOCK_A_REALTIME_KEY, redis_conn)
@@ -47,7 +46,57 @@ class UtilFuncs(object):
                 logger.error(f"Error while fetching or writing data: {inner_e}")
                 raise  # 可能需要重新抛出异常或处理错误
         
-    def get_s_code_hist():
+    @staticmethod
+    def get_s_code_data(ak_func_name, config_dict, s_code, period, start_date, end_date, adjust):
+        _ak_func = getattr(ak, ak_func_name, None)
+        if _ak_func is None:
+            error_msg = f'Function {ak_func_name} not found in module akshare.'
+            logger.error(error_msg)
+            raise AirflowException(error_msg)
+        
+        _s_df = UtilFuncs.try_to_call(
+            _ak_func,
+            {'symbol': s_code, 'period': period, 
+             'start_date': start_date, 'end_date': end_date, 'adjust': adjust
+            })
+        if _s_df is None or _s_df.empty:
+            if _s_df is None:
+                error_msg = f'Data function {ak_func_name} returned None with params(s_code={s_code}, period={period}, start_date={start_date}, end_date={end_date}, adjust={adjust}).'
+                logger.error(error_msg)
+                # raise AirflowException(error_msg)
+            else:
+                warning_msg = f'No data found for {ak_func_name} with params(s_code={s_code}, period={period}, start_date={start_date}, end_date={end_date}, adjust={adjust}).'
+                logger.warning(warning_msg)
+            return pd.DataFrame()  # 返回空的 DataFrame，以避免进一步的处理出错
+        
+        _s_df = ut.remove_cols(_s_df, config_dict)
+        _s_df.rename(columns=ut.get_col_dict(config_dict), inplace=True)
+        # _df['s_code'] = _df['s_code'].apply(UtilFuncs.pref_s_code)
+        # _s_df = ut.add_td(_s_df, td)
+        return _s_df
+
+    @staticmethod
+    def merge_s_code_data(ak_func_name, config_dict, s_code, period, start_date, end_date, adjust):
+        _s_df = UtilFuncs.get_s_code_data(ak_func_name, config_dict, s_code, period, start_date, end_date, adjust)
+        _hfq_s_df = UtilFuncs.get_s_code_data(ak_func_name, config_dict, s_code, period, start_date, end_date, adjust)
+        _s_df.set_index('td', inplace=True)
+        _hfq_s_df.set_index('td', inplace=True)
+        _hfq_s_df = _hfq_s_df.add_suffix('_hfq')
+        _merged_df = pd.merge(_s_df, _hfq_s_df, left_index=True, right_index=True, how='outer')
+        return _merged_df
+    
+    @staticmethod
+    def get_all_merged_s_code_data(s_code_list, ak_func_name, config_dict, period, start_date, end_date, adjust):
+        _len_s_code_list = len(s_code_list)
+        _df_result = pd.DataFrame()
+        for _index, _s_code in enumerate(s_code_list, start=1):
+            logger.info(f'({_index}/{_len_s_code_list}) downloading data with s_code={_s_code}')
+            _merge_s_code_df = UtilFuncs.merge_s_code_data(ak_func_name, config_dict, _s_code, period, start_date, end_date, adjust)
+            _df_result = pd.concat([_df_result, _merge_s_code_df], axis=0)
+        return _df_result
+
+    @staticmethod
+    def store_trade_date():
         raise NotImplementedError
     # endregion stock funcs
 
@@ -347,10 +396,26 @@ class UtilFuncs(object):
 # df = UtilFuncs.get_data_by_td('stock_zt_pool_em', '20240402')
 # print(df.columns)
 # print(df.head(3))
-from airflow.providers.redis.hooks.redis import RedisHook
-REDIS_CONN_ID = "local_redis_3"
-redis_hook = RedisHook(redis_conn_id=REDIS_CONN_ID)
-s_code_list = UtilFuncs.get_s_code_list(redis_hook.get_conn())
-print(s_code_list)
+
+
+# from airflow.providers.redis.hooks.redis import RedisHook
+# REDIS_CONN_ID = "local_redis_3"
+# redis_hook = RedisHook(redis_conn_id=REDIS_CONN_ID)
+# s_code_list = UtilFuncs.get_s_code_list(redis_hook.get_conn())
+# print(s_code_list)
+
+
+from dg_ak.store_daily.stock.ak_dg_stock_config import stock_cols_config
+s_df = UtilFuncs.get_s_code_data('stock_zh_a_hist', stock_cols_config['stock_zh_a_hist'], s_code='000004', period='daily', start_date='20240101', end_date='20240424', adjust="")
+hfq_s_df = UtilFuncs.get_s_code_data('stock_zh_a_hist', stock_cols_config['stock_zh_a_hist'], s_code='000004', period='daily', start_date='20240101', end_date='20240424', adjust='hfq')
+s_df.set_index('td', inplace=True)
+hfq_s_df.set_index('td', inplace=True)
+hfq_s_df = hfq_s_df.add_suffix('_hfq')
+print(s_df.head(1))
+print(hfq_s_df.head(1))
+merged_df = pd.merge(s_df, hfq_s_df, left_index=True, right_index=True, how='outer')
+print(merged_df[['o', 'o_hfq', 'c', 'c_hfq']].head())
+print(merged_df[['o', 'o_hfq', 'c', 'c_hfq']].tail())
+
 # print(UtilFuncs.generate_dt_list('2024-04-01','2024-04-10',dt_format='%Y%m%d'))
 ##################################################

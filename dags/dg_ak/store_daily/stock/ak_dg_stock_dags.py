@@ -17,8 +17,7 @@ redis_hook = RedisHook(redis_conn_id=con.REDIS_CONN_ID)
 pgsql_hook = PostgresHook(postgres_conn_id=con.TXY800_PGSQL_CONN_ID)
 pg_conn = pgsql_hook.get_conn()
 
-# region 板块
-# 行业板块 (Industry Sector) & 概念板块 (Concept Sector) 
+# region 个股行情
 def get_board_list(ti, ak_func_name: str):
     logger.info(f"Downloading board list for {ak_func_name}")
     try:
@@ -181,4 +180,4 @@ for func_names in ak_funk_name_list:
     dag_name = f'ak_dg_board_{board_type}_{source}'
     globals()[dag_name] = generate_dag(func_names[0], func_names[1])
     logger.info(f"DAG for {dag_name} successfully created and registered.")
-# endregion 板块
+# endregion 个股行情
