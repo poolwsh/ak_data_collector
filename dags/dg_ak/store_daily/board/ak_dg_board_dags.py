@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import timedelta
-from dags.dg_ak.utils.util_funcs import UtilFuncs as uf
+from dg_ak.utils.util_funcs import UtilFuncs as uf
 from dg_ak.utils.logger import logger
 import dg_ak.utils.config as con
 
@@ -30,7 +30,7 @@ def get_board_list(ti, ak_func_name: str):
 
         _redis_key = f'{ak_func_name}_board_list'
         uf.write_df_to_redis(_redis_key, board_list_data_df, redis_hook.get_conn(), uf.default_redis_ttl)
-        ti.xcom_push(key=f'{ak_func_name}_board_list', value=_redis_key)
+        uf.push_data(ti, f'{ak_func_name}_board_list', _redis_key)
 
         # 保存数据到CSV
         temp_csv_path = uf.save_data_to_csv(board_list_data_df, ak_func_name)
@@ -51,24 +51,37 @@ def get_board_list(ti, ak_func_name: str):
             os.remove(temp_csv_path)
             logger.info(f"Temporary CSV file {temp_csv_path} has been removed.")
 
-def store_board_data(ti, ak_func_name):
-    """
-    Store board list data.
-    """
-    insert_sql = f"""
-        INSERT INTO board_list_{ak_func_name}
-        SELECT * FROM temp_board_list_{ak_func_name}
-        ON CONFLICT (key_columns) DO UPDATE
-        SET columns = excluded.columns
-        RETURNING key_columns;
-        """
-    uf.store_ak_data(ti, pg_conn, ak_func_name, insert_sql, truncate=True)
+def store_board_list(ti, ak_func_name):
+    logger.info(f"Starting data storage operations for {ak_func_name}")
 
-def save_tracing_board_data(ti, ak_func_name, category):
+    # 构建SQL语句，从一个表复制到另一个表，忽略冲突
+    insert_sql = f"""
+        INSERT INTO ak_dg_{ak_func_name}_store
+        SELECT * FROM ak_dg_{ak_func_name}
+        ON CONFLICT (date, b_code) DO NOTHING
+        RETURNING date, b_code;
     """
-    Update tracing data specific to board list processing.
-    """
-    uf.execute_tracing_updates(ti, pg_conn, ak_func_name, category=category)
+
+    try:
+        _inserted_rows = uf.store_ak_data(pg_conn, ak_func_name, insert_sql, truncate=True)
+
+        _keys = {(row[0], row[1]) for row in _inserted_rows}
+        uf.push_data(ti, f'{ak_func_name}_stored_keys', list(_keys))
+        logger.info("Data operation completed successfully for {ak_func_name}.")
+    except Exception as e:
+        logger.error(f"Failed during data operations for {ak_func_name}: {str(e)}")
+        raise AirflowException(e)
+
+def save_tracing_board_list(ti, ak_func_name):
+    date_list = uf.pull_data(ti, f'{ak_func_name}_stored_keys')
+    if not date_list:
+        logger.info(f"No dates to process for {ak_func_name}")
+        return
+
+    # Convert dates to tracing data structure and insert
+    uf.insert_tracing_date_data(pg_conn, ak_func_name, date_list)
+    logger.info(f"Tracing data saved for {ak_func_name} on dates: {date_list}")
+
 
 def get_board_cons(ti, ak_func_name):
     logger.info(f"Starting to save data for {ak_func_name}")
@@ -81,7 +94,7 @@ def get_board_cons(ti, ak_func_name):
         if _date_df.empty:
             logger.warning(f"No dates available for {ak_func_name}, skipping data fetch.")
             return
-        _board_cons_df = uf.get_data_today_by_symbol_list(ak_func_name, _date_df['b_name'])
+        _board_cons_df = uf.get_data_by_board_names(ak_func_name, _date_df['b_name'])
          # 保存数据到CSV
         temp_csv_path = uf.save_data_to_csv(_board_cons_df, ak_func_name)
         if temp_csv_path is None:
@@ -101,6 +114,43 @@ def get_board_cons(ti, ak_func_name):
             os.remove(temp_csv_path)
             logger.info(f"Temporary CSV file {temp_csv_path} has been removed.")
 
+def store_board_cons(ti, ak_func_name):
+    logger.info(f"Starting data storage operations for {ak_func_name}")
+
+    # 构建SQL语句，从一个表复制到另一个表，忽略冲突
+    insert_sql = f"""
+        INSERT INTO ak_dg_{ak_func_name}_store
+        SELECT * FROM ak_dg_{ak_func_name}
+        ON CONFLICT (date, s_code, b_name) DO NOTHING
+        RETURNING date, s_code, b_name;
+    """
+
+    try:
+        _inserted_rows = uf.store_ak_data(pg_conn, ak_func_name, insert_sql, truncate=True)
+
+        _keys = {(row[0], row[1]) for row in _inserted_rows}
+        uf.push_data(ti, f'{ak_func_name}_stored_keys', list(_keys))
+        logger.info("Data operation completed successfully for {ak_func_name}.")
+    except Exception as e:
+        logger.error(f"Failed during data operations for {ak_func_name}: {str(e)}")
+        raise AirflowException(e)
+    
+def save_tracing_board_cons(ti, ak_func_name, param_name):
+    cons_data = uf.pull_data(ti, f'{ak_func_name}_stored_keys')
+    if not cons_data:
+        logger.info(f"No constituent data to process for {ak_func_name}")
+        return
+
+    # Flatten the data to prepare for insertion
+    data_to_insert = []
+    for date, param_values in cons_data.items():
+        for param_value in param_values:
+            data_to_insert.append((ak_func_name, date, param_name, param_value))
+
+    # Convert to tracing data structure and insert
+    uf.insert_tracing_date_1_param_data(pg_conn, data_to_insert)
+    logger.info(f"Tracing data saved for {ak_func_name} with parameter data.")
+
 def generate_dag(board_list_func, board_con_func):
     logger.info(f"Generating DAG for {board_list_func} and {board_con_func}")
     default_args = {
@@ -115,7 +165,7 @@ def generate_dag(board_list_func, board_con_func):
     }
 
     dag = DAG(
-        f'下载板块相关数据',
+        f'使用{board_list_func}和{board_con_func}下载板块相关数据',
         default_args=default_args,
         description=f'利用akshare的函数{board_list_func}和{board_con_func}下载板块相关数据',
         schedule='0 15 * * *', # 北京时间: 15+8=23
@@ -127,39 +177,39 @@ def generate_dag(board_list_func, board_con_func):
 
     tasks = {
         'get_board_list':PythonOperator(
-            task_id=f'get_board_list({board_list_func})',
+            task_id=f'get_board_list-{board_list_func}',
             python_callable=get_board_list,
             op_kwargs={'ak_func_name': board_list_func},
             dag=dag,
         ),
         'store_board_list':PythonOperator(
-            task_id=f'store_board_list({board_list_func})',
-            python_callable=store_board_data,
+            task_id=f'store_board_list-{board_list_func}',
+            python_callable=store_board_list,
             op_kwargs={'ak_func_name': board_list_func},
             dag=dag,
         ),
         'save_tracing_board_list':PythonOperator(
-            task_id=f'save_tracing_board_list({board_list_func})',
-            python_callable=save_tracing_board_data,
-            op_kwargs={'ak_func_name': board_list_func, 'category': 'board_list'},
+            task_id=f'save_tracing_board_list-{board_list_func}',
+            python_callable=save_tracing_board_list,
+            op_kwargs={'ak_func_name': board_list_func},
             dag=dag,
         ),
         'get_board_cons':PythonOperator(
-            task_id=f'get_board_cons({board_con_func})',
+            task_id=f'get_board_cons-{board_con_func}',
             python_callable=get_board_cons,
             op_kwargs={'ak_func_name': board_con_func},
             dag=dag,
         ),
         'store_board_cons':PythonOperator(
-            task_id=f'store_board_cons({board_con_func})',
-            python_callable=store_board_data,
+            task_id=f'store_board_cons-{board_con_func}',
+            python_callable=store_board_cons,
             op_kwargs={'ak_func_name': board_con_func},
             dag=dag,
         ),
         'save_tracing_board_cons':PythonOperator(
-            task_id=f'save_tracing_board_cons({board_con_func})',
-            python_callable=save_tracing_board_data,
-            op_kwargs={'ak_func_name': board_con_func, 'category': 'board_cons'},
+            task_id=f'save_tracing_board_cons-{board_con_func}',
+            python_callable=save_tracing_board_cons,
+            op_kwargs={'ak_func_name': board_con_func, 'param_name': 'board_cons'},
             dag=dag,
         )
     }

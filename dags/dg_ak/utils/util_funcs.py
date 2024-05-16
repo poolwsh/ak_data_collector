@@ -7,6 +7,7 @@ sys.path.append('/data/workspace/git/ak_data_collector/dags')
 import os
 import time
 import redis
+import socket
 import traceback
 import pandas as pd
 import akshare as ak
@@ -197,6 +198,11 @@ class UtilFuncs(object):
         # raise AirflowException(f'Function {ak_func.__name__} failed after {num_retries} attempts')
 
     @staticmethod
+    def get_data_today(ak_func_name: str, td_pa_name: str = 'date', date_format: str = '%Y%m%d') -> pd.DataFrame:
+        today_date = datetime.now().date().strftime(date_format)  # 获取今天的日期，并按照指定格式化
+        return UtilFuncs.get_data_by_td(ak_func_name, today_date, td_pa_name)
+    
+    @staticmethod
     def get_data_by_td(ak_func_name: str, td: str, td_pa_name: str = 'date') -> pd.DataFrame:
         _ak_func = getattr(ak, ak_func_name, None)
         if _ak_func is None:
@@ -246,6 +252,40 @@ class UtilFuncs(object):
                     retry_count += 1
 
         return combined_df
+
+
+    @staticmethod
+    def get_data_by_board_names(ak_func_name, board_names):
+        """
+        Retrieve stock constituent data for a list of board names using specified akshare function.
+
+        :param ak_func_name: The name of the akshare function to use (e.g., 'stock_board_concept_cons_ths').
+        :param board_names: List of board names (e.g., ['AI手机', '车联网']).
+        :return: A DataFrame containing combined data for all board names.
+        """
+        all_data = []
+        for board_name in board_names:
+            try:
+                # Fetch the akshare function dynamically
+                data_func = getattr(ak, ak_func_name, None)
+                if data_func is None:
+                    logger.error(f"Function {ak_func_name} not found in akshare.")
+                    continue
+                
+                # Call the function and retrieve data
+                data = data_func(symbol=board_name)
+                data['board_name'] = board_name  # Add the board name as a column to the DataFrame
+                all_data.append(data)
+            except Exception as e:
+                logger.error(f"Failed to fetch data for board {board_name}: {e}")
+
+        # Combine all data into a single DataFrame
+        if all_data:
+            combined_data = pd.concat(all_data, ignore_index=True)
+            return combined_data
+        else:
+            return pd.DataFrame()  # Return an empty DataFrame if no data was fetched
+
 
     @staticmethod
     def write_df_to_redis(key: str, df: pd.DataFrame, conn: redis.Redis, ttl: int):
@@ -309,6 +349,124 @@ class UtilFuncs(object):
     # endregion tool funcs
 
 # region store once
+
+    @staticmethod
+    def write_df_to_redis(key: str, df: pd.DataFrame, conn, ttl: int):
+        """
+        Serialize a DataFrame to JSON and store it in Redis.
+        """
+        try:
+            # Convert DataFrame to JSON
+            data_json = df.to_json(date_format='iso')
+            # Set in Redis with expiration time
+            conn.setex(key, ttl, data_json)
+            logger.info(f"DataFrame written to Redis under key: {key} with TTL {ttl} seconds.")
+        except Exception as e:
+            logger.error(f"Error writing DataFrame to Redis: {str(e)}")
+            raise AirflowException(f"Error writing DataFrame to Redis: {str(e)}")
+
+    @staticmethod
+    def get_dates_from_redis(key: str, conn):
+        """
+        Retrieve a DataFrame from Redis using the specified key and convert it from JSON.
+        Check if the key is not None and data exists for the key.
+        """
+        if key is None:
+            logger.error("Key is None, cannot retrieve data from Redis.")
+            return pd.DataFrame()  # Return an empty DataFrame if the key is None
+
+        try:
+            data_json = conn.get(key)
+            if not data_json:
+                logger.warning(f"No data found in Redis for key: {key}")
+                return pd.DataFrame()  # Return an empty DataFrame if no data found
+
+            df = pd.read_json(BytesIO(data_json), dtype=str)
+            logger.info(f"DataFrame retrieved from Redis for key: {key}")
+            return df
+        except Exception as e:
+            logger.error(f"Error reading DataFrame from Redis for key: {key}: {e}")
+            return pd.DataFrame()  # Return an empty DataFrame on error
+
+        
+    @staticmethod
+    def store_ak_data(pg_conn, ak_func_name, insert_sql, truncate=False):
+        cursor = pg_conn.cursor()
+        try:
+            cursor.execute(insert_sql)
+            # Fetch all returned rows if RETURNING is used
+            inserted_rows = cursor.fetchall()
+
+            pg_conn.commit()
+            logger.info(f"Data successfully inserted into table for {ak_func_name}")
+
+            if truncate:
+                truncate_sql = f"TRUNCATE TABLE ak_dg_{ak_func_name};"
+                cursor.execute(truncate_sql)
+                pg_conn.commit()
+                logger.info(f"Table ak_dg_{ak_func_name} has been truncated")
+
+            return inserted_rows  # Return the list of inserted rows
+
+        except Exception as e:
+            pg_conn.rollback()
+            logger.error(f"Failed to store data for {ak_func_name}: {e}")
+            raise
+        finally:
+            cursor.close()
+
+    @staticmethod
+    def push_data(context, key, value):
+        if hasattr(context, 'xcom_push'):
+            context.xcom_push(key=key, value=value)
+        elif isinstance(context, redis.Redis):
+            context.set(key, value)
+        else:
+            raise ValueError("Unsupported context provided for data push.")
+
+    @staticmethod
+    def pull_data(context, key):
+        """
+        Pull data from XCom based on the context and key provided.
+        """
+        if hasattr(context, 'xcom_pull'):
+            return context.xcom_pull(key=key)
+        else:
+            raise ValueError("Context does not support xcom_pull operation.")
+
+    @staticmethod
+    def save_data_to_csv(df, filename, dir_path='/tmp/ak_data'):
+        if df.empty:
+            logger.warning("No data to save to CSV.")
+            return None
+        try:
+            os.makedirs(dir_path, exist_ok=True)  # Ensure the directory exists
+            file_path = os.path.join(dir_path, f"{filename}.csv")
+            df.to_csv(file_path, index=False)
+            logger.info(f"Data saved to CSV at {file_path}")
+            return file_path
+        except Exception as e:
+            logger.error(f"Failed to save data to CSV: {e}")
+            return None
+
+    @staticmethod
+    def insert_data_from_csv(conn, csv_path, table_name):
+        if not os.path.exists(csv_path):
+            logger.error("CSV file does not exist.")
+            return
+        try:
+            cursor = conn.cursor()
+            with open(csv_path, 'r') as file:
+                # Assuming the table columns match the CSV columns directly
+                cursor.copy_from(file, table_name, sep=',')
+                conn.commit()
+                logger.info(f"Data from {csv_path} successfully loaded into {table_name}.")
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Failed to load data from CSV: {e}")
+        finally:
+            os.remove(csv_path)
+            logger.info(f"CSV file {csv_path} has been deleted after insertion.")
 
 # endregion store once
 
@@ -378,17 +536,67 @@ class UtilFuncs(object):
             cursor.close()
 
     @staticmethod
-    def set_tracing_by_date(key, dt):
-        raise NotImplementedError
+    def prepare_tracing_data(ak_func_name, date_list, param_name=None, param_values=None):
+        host_name = os.getenv('HOSTNAME', socket.gethostname())
+        current_time = datetime.now()
+        data = []
+        if param_name is not None and param_values is not None:
+            # Prepare data for tracing with an additional parameter
+            for date in date_list:
+                for param_value in param_values:
+                    data.append((ak_func_name, param_name, param_value, date, current_time, current_time, host_name))
+        else:
+            # Prepare data for simple date-based tracing
+            for date in date_list:
+                data.append((ak_func_name, date, current_time, current_time, host_name))
+        return data
 
     @staticmethod
-    def get_tracing_by_date_list(key):
-        raise NotImplementedError
+    def execute_tracing_data_insert(conn, insert_sql, data):
+        cursor = conn.cursor()
+        try:
+            cursor.executemany(insert_sql, data)
+            conn.commit()
+            logger.info("Tracing data inserted/updated successfully.")
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Failed to insert/update tracing data: {e}")
+            raise AirflowException(e)
+        finally:
+            cursor.close()
 
     @staticmethod
-    def set_tracing_by_date_list(key):
-        raise NotImplementedError
+    def insert_tracing_date_data(conn, ak_func_name, date_list):
+        data = UtilFuncs.prepare_tracing_data(ak_func_name, date_list)
+        insert_sql = """
+            INSERT INTO dg_ak_tracing_date (ak_func_name, date, create_time, update_time, host_name)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (ak_func_name, date) DO UPDATE 
+            SET update_time = EXCLUDED.update_time;
+            """
+        UtilFuncs.execute_tracing_data_insert(conn, insert_sql, data)
 
+    @staticmethod
+    def insert_tracing_date_1_param_data(conn, ak_func_name, date_list, param_name, param_values):
+        data = UtilFuncs.prepare_tracing_data(ak_func_name, date_list, param_name, param_values)
+        insert_sql = """
+            INSERT INTO dg_ak_tracing_date_1_param (ak_func_name, param_name, param_value, date, create_time, update_time, host_name)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (ak_func_name, param_name, param_value, date) DO UPDATE 
+            SET update_time = EXCLUDED.update_time;
+            """
+        UtilFuncs.execute_tracing_data_insert(conn, insert_sql, data)
+
+    @staticmethod
+    def insert_tracing_scode_date_data(conn, ak_func_name, scode_list, date):
+        data = [(ak_func_name, scode, date, datetime.now(), datetime.now(), os.getenv('HOSTNAME', socket.gethostname())) for scode in scode_list]
+        insert_sql = """
+            INSERT INTO dg_ak_tracing_scode_date (ak_func_name, scode, date, create_time, update_time, host_name)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (ak_func_name, scode, date) DO UPDATE 
+            SET update_time = EXCLUDED.update_time;
+            """
+        UtilFuncs.execute_tracing_data_insert(conn, insert_sql, data)
 # endregion tracing data funcs
 
 ##################################################

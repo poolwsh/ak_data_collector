@@ -1,4 +1,4 @@
-# 调用akshare并保存数据到对应的表中： 
+# 使用akshare接口，读取板块相关数据并保存到对应的表中： 
 ## stock_board_concept_name_ths
 ```python
 import akshare as ak
@@ -50,7 +50,7 @@ ak.stock_board_industry_name_em().head(3)
 ## stock_board_concept_cons_ths
 ```python
 import akshare as ak
-ak.ak.stock_board_concept_cons_ths(symbol="AI手机").head(3)
+ak.stock_board_concept_cons_ths(symbol="AI手机").head(3)
 ```
 ```shell
 序号	代码	名称	现价	涨跌幅	涨跌	涨速	换手	量比	振幅	成交额	流通股	流通市值	市盈率
@@ -62,7 +62,7 @@ ak.ak.stock_board_concept_cons_ths(symbol="AI手机").head(3)
 ## stock_board_concept_cons_em
 ```python
 import akshare as ak
-ak.ak.ak.stock_board_concept_cons_em(symbol="车联网").head(3)
+ak.stock_board_concept_cons_em(symbol="车联网").head(3)
 ```
 ```shell
 序号	代码	名称	最新价	涨跌幅	涨跌额	成交量	成交额	振幅	最高	最低	今开	昨收	换手率	市盈率-动态	市净率
@@ -74,7 +74,7 @@ ak.ak.ak.stock_board_concept_cons_em(symbol="车联网").head(3)
 ## stock_board_industry_cons_ths
 ```python
 import akshare as ak
-ak.ak.ak.stock_board_industry_cons_ths(symbol="车联网").head(3)
+ak.stock_board_industry_cons_ths(symbol="车联网").head(3)
 ```
 ```shell
 序号	代码	名称	现价	涨跌幅	涨跌	涨速	换手	量比	振幅	成交额	流通股	流通市值	市盈率
@@ -86,7 +86,7 @@ ak.ak.ak.stock_board_industry_cons_ths(symbol="车联网").head(3)
 ## stock_board_industry_cons_em
 ```python
 import akshare as ak
-ak.ak.ak.stock_board_industry_cons_em(symbol="小金属").head(3)
+ak.stock_board_industry_cons_em(symbol="小金属").head(3)
 ```
 ```shell
 序号	代码	名称	最新价	涨跌幅	涨跌额	成交量	成交额	振幅	最高	最低	今开	昨收	换手率	市盈率-动态	市净率

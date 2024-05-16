@@ -4,7 +4,7 @@ import os
 import socket
 from datetime import datetime, timedelta
 import pandas as pd
-from dags.dg_ak.utils.util_funcs import UtilFuncs as uf
+from dg_ak.utils.util_funcs import UtilFuncs as uf
 from dg_ak.utils.logger import logger
 
 from airflow.exceptions import AirflowException
@@ -57,44 +57,70 @@ def get_ak_data(ti, ak_func_name):
         os.remove(_temp_csv_path)
         logger.info(f"{_temp_csv_path} has been removed.")
 
-def store_ak_data(ti, ak_func_name):
+def store_zdt_data(ti, ak_func_name: str):
     logger.info(f"Starting copy and clean data operations for {ak_func_name}")
 
+    insert_sql = f"""
+        INSERT INTO ak_dg_{ak_func_name}_store
+        SELECT * FROM ak_dg_{ak_func_name}
+        ON CONFLICT (date, b_code) DO UPDATE
+        SET b_create_date = EXCLUDED.b_create_date,
+            b_name = EXCLUDED.b_name,
+            stock_count = EXCLUDED.stock_count,
+            url = EXCLUDED.url
+        RETURNING date, b_code;
+        """
+
     try:
-        _conn = pgsql_hook.get_conn()
-        _cursor = _conn.cursor()
+        _inserted_rows = uf.store_ak_data(pg_conn, ak_func_name, insert_sql, truncate=False)
+        _tds_codes = {(row[0], row[1]) for row in _inserted_rows}
+        uf.push_data(ti, f'{ak_func_name}_stored_tds_codes', list(_tds_codes))  # Replace direct ti.xcom_push call
 
-        insert_sql = f"""
-            INSERT INTO ak_dg_{ak_func_name}_store
-            SELECT * FROM ak_dg_{ak_func_name}
-            ON CONFLICT (td, s_code) DO NOTHING
-            RETURNING td;
-            """
-        _cursor.execute(insert_sql)
-        _inserted_tds = _cursor.fetchall()  # Fetch all returned tds
-        _tds = {td[0] for td in _inserted_tds}
-        logger.debug(f"stored_tds: {_tds}")
-
-        # Push the list of inserted TDS to XCom
-        ti.xcom_push(key=f'{ak_func_name}_stored_tds', value=list(_tds))
-
-        _conn.commit()
-        logger.info("Data operation completed successfully, starting truncation.")
-
-        truncate_sql = f"TRUNCATE TABLE ak_dg_{ak_func_name};"
-        _cursor.execute(truncate_sql)
-        _conn.commit()
+        logger.info("Data operation completed successfully for {ak_func_name}.")
 
     except Exception as e:
         logger.error(f"Failed during copy and clean operations for {ak_func_name}: {str(e)}")
-        if _conn:
-            _conn.rollback()
         raise AirflowException(e)
-    finally:
-        if _cursor is not None:
-            _cursor.close()
-        if _conn is not None:
-            _conn.close()
+
+    
+# def store_ak_data(ti, ak_func_name):
+#     logger.info(f"Starting copy and clean data operations for {ak_func_name}")
+
+#     try:
+#         _conn = pgsql_hook.get_conn()
+#         _cursor = _conn.cursor()
+
+#         insert_sql = f"""
+#             INSERT INTO ak_dg_{ak_func_name}_store
+#             SELECT * FROM ak_dg_{ak_func_name}
+#             ON CONFLICT (td, s_code) DO NOTHING
+#             RETURNING td;
+#             """
+#         _cursor.execute(insert_sql)
+#         _inserted_tds = _cursor.fetchall()  # Fetch all returned tds
+#         _tds = {td[0] for td in _inserted_tds}
+#         logger.debug(f"stored_tds: {_tds}")
+
+#         # Push the list of inserted TDS to XCom
+#         ti.xcom_push(key=f'{ak_func_name}_stored_tds', value=list(_tds))
+
+#         _conn.commit()
+#         logger.info("Data operation completed successfully, starting truncation.")
+
+#         truncate_sql = f"TRUNCATE TABLE ak_dg_{ak_func_name};"
+#         _cursor.execute(truncate_sql)
+#         _conn.commit()
+
+#     except Exception as e:
+#         logger.error(f"Failed during copy and clean operations for {ak_func_name}: {str(e)}")
+#         if _conn:
+#             _conn.rollback()
+#         raise AirflowException(e)
+#     finally:
+#         if _cursor is not None:
+#             _cursor.close()
+#         if _conn is not None:
+#             _conn.close()
 
 def update_tracing_data(ti, ak_func_name):
     logger.info(f"Preparing to insert tracing data for {ak_func_name}")
@@ -193,8 +219,8 @@ ak_funk_name_list = [
     'stock_zt_pool_em', 'stock_zt_pool_previous_em', 'stock_zt_pool_strong_em', 
     'stock_zt_pool_sub_new_em', 'stock_zt_pool_zbgc_em', 'stock_zt_pool_dtgc_em']
 
-for func_name in ak_funk_name_list:
-    globals()[f'ak_dg_zdt_{func_name}'] = generate_dag(func_name)
-    logger.info(f"DAG for {func_name} successfully created and registered.")
+# for func_name in ak_funk_name_list:
+#     globals()[f'ak_dg_zdt_{func_name}'] = generate_dag(func_name)
+#     logger.info(f"DAG for {func_name} successfully created and registered.")
 
 # endregion 涨跌停

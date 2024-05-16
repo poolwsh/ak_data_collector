@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import timedelta
-from dags.dg_ak.utils.util_funcs import UtilFuncs as uf
+from dg_ak.utils.util_funcs import UtilFuncs as uf
 from dg_ak.utils.logger import logger
 import dg_ak.utils.config as con
 
@@ -173,11 +173,11 @@ ak_funk_name_list = [
     ['stock_board_industry_name_em', 'stock_board_industry_cons_em']
 ]
 
-for func_names in ak_funk_name_list:
-    words = func_names[0].split('_')
-    source = words[-1]
-    board_type = words[-3]
-    dag_name = f'ak_dg_board_{board_type}_{source}'
-    globals()[dag_name] = generate_dag(func_names[0], func_names[1])
-    logger.info(f"DAG for {dag_name} successfully created and registered.")
+# for func_names in ak_funk_name_list:
+#     words = func_names[0].split('_')
+#     source = words[-1]
+#     board_type = words[-3]
+#     dag_name = f'ak_dg_board_{board_type}_{source}'
+#     globals()[dag_name] = generate_dag(func_names[0], func_names[1])
+#     logger.info(f"DAG for {dag_name} successfully created and registered.")
 # endregion 个股行情
