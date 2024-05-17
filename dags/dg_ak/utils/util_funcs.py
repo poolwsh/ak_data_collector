@@ -1,10 +1,12 @@
 ##########################################
 ### test
+import csv
 import sys
 sys.path.append('/data/workspace/git/ak_data_collector/dags')
 #######################################
 
 import os
+import json
 import time
 import redis
 import socket
@@ -48,7 +50,7 @@ class UtilFuncs(object):
                 raise  # 可能需要重新抛出异常或处理错误
         
     @staticmethod
-    def get_s_code_data(ak_func_name, config_dict, s_code, period, start_date, end_date, adjust):
+    def get_s_code_data(ak_func_name, ak_cols_config_dict, s_code, period, start_date, end_date, adjust):
         _ak_func = getattr(ak, ak_func_name, None)
         if _ak_func is None:
             error_msg = f'Function {ak_func_name} not found in module akshare.'
@@ -70,8 +72,8 @@ class UtilFuncs(object):
                 logger.warning(warning_msg)
             return pd.DataFrame()  # 返回空的 DataFrame，以避免进一步的处理出错
         
-        _s_df = ut.remove_cols(_s_df, config_dict)
-        _s_df.rename(columns=ut.get_col_dict(config_dict), inplace=True)
+        _s_df = ut.remove_cols(_s_df, ak_cols_config_dict[ak_func_name])
+        _s_df.rename(columns=ut.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
         # _df['s_code'] = _df['s_code'].apply(UtilFuncs.pref_s_code)
         # _s_df = ut.add_td(_s_df, td)
         return _s_df
@@ -193,17 +195,43 @@ class UtilFuncs(object):
                 time.sleep(_rd)
             except Exception as e:
                 logger.error(f"Error calling function {ak_func.__name__} with parameters: {param_dict}. Error: {e}")
-                break
+                raise AirflowException()
         logger.error(f'Failed to call function {ak_func.__name__} after {num_retries} attempts with parameters: {param_dict}')
-        # raise AirflowException(f'Function {ak_func.__name__} failed after {num_retries} attempts')
+        raise AirflowException(f'Function {ak_func.__name__} failed after {num_retries} attempts')
 
     @staticmethod
-    def get_data_today(ak_func_name: str, td_pa_name: str = 'date', date_format: str = '%Y%m%d') -> pd.DataFrame:
-        today_date = datetime.now().date().strftime(date_format)  # 获取今天的日期，并按照指定格式化
-        return UtilFuncs.get_data_by_td(ak_func_name, today_date, td_pa_name)
-    
+    def get_data_today(ak_func_name: str, ak_cols_config_dict:dict, date_format: str = '%Y-%m-%d') -> pd.DataFrame:
+        _today_date = datetime.now().strftime(date_format)  # Get today's date in the specified format
+        _ak_func = getattr(ak, ak_func_name, None)
+        
+        if _ak_func is None:
+            error_msg = f'Function {ak_func_name} not found in module akshare.'
+            logger.error(error_msg)
+            raise AirflowException(error_msg)
+        
+        try:
+            _df = UtilFuncs.try_to_call(_ak_func)
+            if _df is None or _df.empty:
+                if _df is None:
+                    error_msg = f'Data function {ak_func_name} returned None for today ({_today_date}).'
+                    logger.error(error_msg)
+                    raise AirflowException(error_msg)
+                else:
+                    warning_msg = f'No data found for {ak_func_name} for today ({_today_date}).'
+                    logger.warning(warning_msg)
+                    return pd.DataFrame()  # Return empty DataFrame to avoid further errors
+            
+            _df = ut.remove_cols(_df, ak_cols_config_dict[ak_func_name])
+            _df.rename(columns=ut.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
+            _df['date'] = _today_date  # Add a new column 'date' with today's date
+            # _df['date'] = pd.to_datetime(_df['date'], errors='coerce')
+            return _df
+        except Exception as e:
+            logger.error(f"Error calling function {ak_func_name} for today ({_today_date}): {e}\n{traceback.format_exc()}")
+            raise AirflowException(f"Error calling function {ak_func_name} for today ({_today_date}): {e}")
+
     @staticmethod
-    def get_data_by_td(ak_func_name: str, td: str, td_pa_name: str = 'date') -> pd.DataFrame:
+    def get_data_by_td(ak_func_name: str, ak_cols_config_dict:dict, td: str, td_pa_name: str = 'date') -> pd.DataFrame:
         _ak_func = getattr(ak, ak_func_name, None)
         if _ak_func is None:
             error_msg = f'Function {ak_func_name} not found in module akshare.'
@@ -221,8 +249,8 @@ class UtilFuncs(object):
                 logger.warning(warning_msg)
             return pd.DataFrame()  # 返回空的 DataFrame，以避免进一步的处理出错
         
-        _df = ut.remove_cols(_df, ak_func_name)
-        _df.rename(columns=ut.get_col_dict(ak_func_name), inplace=True)
+        _df = ut.remove_cols(_df, ak_cols_config_dict[ak_func_name])
+        _df.rename(columns=ut.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
         # _df['s_code'] = _df['s_code'].apply(UtilFuncs.pref_s_code)
         _df = ut.add_td(_df, td)
         return _df
@@ -255,7 +283,7 @@ class UtilFuncs(object):
 
 
     @staticmethod
-    def get_data_by_board_names(ak_func_name, board_names):
+    def get_data_by_board_names(ak_func_name: str, ak_cols_config_dict:dict, board_names: list[str], date_format: str = '%Y-%m-%d') -> pd.DataFrame:
         """
         Retrieve stock constituent data for a list of board names using specified akshare function.
 
@@ -264,7 +292,7 @@ class UtilFuncs(object):
         :return: A DataFrame containing combined data for all board names.
         """
         all_data = []
-        for board_name in board_names:
+        for b_name in board_names:
             try:
                 # Fetch the akshare function dynamically
                 data_func = getattr(ak, ak_func_name, None)
@@ -272,20 +300,26 @@ class UtilFuncs(object):
                     logger.error(f"Function {ak_func_name} not found in akshare.")
                     continue
                 
-                # Call the function and retrieve data
-                data = data_func(symbol=board_name)
-                data['board_name'] = board_name  # Add the board name as a column to the DataFrame
-                all_data.append(data)
+                # Call the function using try_to_call for retries and error handling
+                data = UtilFuncs.try_to_call(data_func, {'symbol': b_name})
+                if data is not None and not data.empty:
+                    data['b_name'] = b_name  # Add the board name as a column to the DataFrame
+                    all_data.append(data)
+                else:
+                    logger.warning(f"No data found for board {b_name}")
             except Exception as e:
-                logger.error(f"Failed to fetch data for board {board_name}: {e}")
+                logger.error(f"Failed to fetch data for board {b_name}: {e}")
 
         # Combine all data into a single DataFrame
         if all_data:
-            combined_data = pd.concat(all_data, ignore_index=True)
-            return combined_data
+            combined_df = pd.concat(all_data, ignore_index=True)
+            combined_df = ut.remove_cols(combined_df, ak_cols_config_dict[ak_func_name])
+            combined_df.rename(columns=ut.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
+            _today_date = datetime.now().strftime(date_format)
+            combined_df['date'] = _today_date
+            return combined_df
         else:
             return pd.DataFrame()  # Return an empty DataFrame if no data was fetched
-
 
     @staticmethod
     def write_df_to_redis(key: str, df: pd.DataFrame, conn: redis.Redis, ttl: int):
@@ -349,6 +383,12 @@ class UtilFuncs(object):
     # endregion tool funcs
 
 # region store once
+    @staticmethod
+    def load_ak_cols_config(config_file_path: str) -> dict:
+        config = {}
+        with open(config_file_path, 'r', encoding='utf-8') as file:
+            exec(file.read(), {}, config)
+        return config['ak_cols_config']
 
     @staticmethod
     def write_df_to_redis(key: str, df: pd.DataFrame, conn, ttl: int):
@@ -366,7 +406,7 @@ class UtilFuncs(object):
             raise AirflowException(f"Error writing DataFrame to Redis: {str(e)}")
 
     @staticmethod
-    def get_dates_from_redis(key: str, conn):
+    def get_df_from_redis(key: str, conn):
         """
         Retrieve a DataFrame from Redis using the specified key and convert it from JSON.
         Check if the key is not None and data exists for the key.
@@ -435,14 +475,14 @@ class UtilFuncs(object):
             raise ValueError("Context does not support xcom_pull operation.")
 
     @staticmethod
-    def save_data_to_csv(df, filename, dir_path='/tmp/ak_data'):
+    def save_data_to_csv(df, filename, dir_path='/tmp/ak_data', include_header=True):
         if df.empty:
             logger.warning("No data to save to CSV.")
             return None
         try:
             os.makedirs(dir_path, exist_ok=True)  # Ensure the directory exists
             file_path = os.path.join(dir_path, f"{filename}.csv")
-            df.to_csv(file_path, index=False)
+            df.to_csv(file_path, index=False, header=include_header)
             logger.info(f"Data saved to CSV at {file_path}")
             return file_path
         except Exception as e:
@@ -457,17 +497,92 @@ class UtilFuncs(object):
         try:
             cursor = conn.cursor()
             with open(csv_path, 'r') as file:
-                # Assuming the table columns match the CSV columns directly
-                cursor.copy_from(file, table_name, sep=',')
+                # Use copy_expert to specify COPY command with CSV HEADER
+                copy_sql = f"COPY {table_name} FROM STDIN WITH CSV HEADER DELIMITER ','"
+                cursor.copy_expert(sql=copy_sql, file=file)
                 conn.commit()
                 logger.info(f"Data from {csv_path} successfully loaded into {table_name}.")
+            cursor.close()
         except Exception as e:
             conn.rollback()
             logger.error(f"Failed to load data from CSV: {e}")
-        finally:
-            os.remove(csv_path)
-            logger.info(f"CSV file {csv_path} has been deleted after insertion.")
+            raise AirflowException(e)
+        
 
+    @staticmethod
+    def insert_data_from_csv1(conn, csv_path, table_name):
+        if not os.path.exists(csv_path):
+            logger.error("CSV file does not exist.")
+            return
+        try:
+            cursor = conn.cursor()
+            with open(csv_path, 'r') as file:
+                csvreader = csv.reader(file)
+                header = next(csvreader)
+                
+                for row in csvreader:
+                    placeholders = ','.join(['%s'] * len(row))
+                    insert_sql = f"""
+                    INSERT INTO {table_name} ({','.join(header)})
+                    VALUES ({placeholders});
+                    """
+                    cursor.execute(insert_sql, row)
+            
+            conn.commit()
+            logger.info(f"Data from {csv_path} successfully loaded into {table_name}.")
+            cursor.close()
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Failed to load data from CSV: {e}")
+            raise AirflowException(e)
+        
+    @staticmethod
+    def get_columns_from_table(pg_conn, table_name, redis_conn: redis.Redis, ttl: int = default_redis_ttl):
+        redis_key = f"columns_{table_name}"
+        
+        try:
+            # Try to get the column names from Redis
+            cached_columns = redis_conn.get(redis_key)
+            if cached_columns:
+                columns = json.loads(cached_columns)
+                logger.info(f"Retrieved column names for table '{table_name}' from Redis.")
+                return columns
+        except Exception as e:
+            logger.warning(f"Failed to read column names from Redis for table '{table_name}': {e}")
+
+        # If not found in Redis, fetch from PostgreSQL
+        columns = []
+        cursor = pg_conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = %s ORDER BY ordinal_position",
+                (table_name,)
+            )
+            columns = [row[0] for row in cursor.fetchall()]
+            # Cache the column names in Redis
+            try:
+                redis_conn.setex(redis_key, ttl, json.dumps(columns))
+                logger.info(f"Retrieved column names for table '{table_name}' from PostgreSQL and cached in Redis.")
+            except Exception as e:
+                logger.warning(f"Failed to cache column names in Redis for table '{table_name}': {e}")
+        except Exception as e:
+            logger.error(f"Error fetching column names from table '{table_name}': {e}")
+        finally:
+            cursor.close()
+
+        return columns
+
+
+    @staticmethod
+    def convert_columns(df, table_name, pg_conn, redis_conn: redis.Redis):
+        columns = UtilFuncs.get_columns_from_table(pg_conn, table_name, redis_conn)
+        # logger.warning(columns)
+        if columns is None or len(columns) < 1 :
+            raise AirflowException(f"Can't found columns using table_name {table_name}")
+
+        df = df[columns]
+        return df
+    
 # endregion store once
 
 
@@ -536,19 +651,12 @@ class UtilFuncs(object):
             cursor.close()
 
     @staticmethod
-    def prepare_tracing_data(ak_func_name, date_list, param_name=None, param_values=None):
+    def prepare_tracing_data(ak_func_name, param_name, date_values):
         host_name = os.getenv('HOSTNAME', socket.gethostname())
         current_time = datetime.now()
         data = []
-        if param_name is not None and param_values is not None:
-            # Prepare data for tracing with an additional parameter
-            for date in date_list:
-                for param_value in param_values:
-                    data.append((ak_func_name, param_name, param_value, date, current_time, current_time, host_name))
-        else:
-            # Prepare data for simple date-based tracing
-            for date in date_list:
-                data.append((ak_func_name, date, current_time, current_time, host_name))
+        for date, value in date_values:
+            data.append((ak_func_name, param_name, value, date, current_time, current_time, host_name))
         return data
 
     @staticmethod
@@ -567,7 +675,11 @@ class UtilFuncs(object):
 
     @staticmethod
     def insert_tracing_date_data(conn, ak_func_name, date_list):
-        data = UtilFuncs.prepare_tracing_data(ak_func_name, date_list)
+        host_name = os.getenv('HOSTNAME', socket.gethostname())
+        current_time = datetime.now()
+        data = []
+        for date in date_list:
+            data.append((ak_func_name, date, current_time, current_time, host_name))
         insert_sql = """
             INSERT INTO dg_ak_tracing_date (ak_func_name, date, create_time, update_time, host_name)
             VALUES (%s, %s, %s, %s, %s)
@@ -577,8 +689,8 @@ class UtilFuncs(object):
         UtilFuncs.execute_tracing_data_insert(conn, insert_sql, data)
 
     @staticmethod
-    def insert_tracing_date_1_param_data(conn, ak_func_name, date_list, param_name, param_values):
-        data = UtilFuncs.prepare_tracing_data(ak_func_name, date_list, param_name, param_values)
+    def insert_tracing_date_1_param_data(conn, ak_func_name, param_name, date_values):
+        data = UtilFuncs.prepare_tracing_data(ak_func_name, param_name, date_values)
         insert_sql = """
             INSERT INTO dg_ak_tracing_date_1_param (ak_func_name, param_name, param_value, date, create_time, update_time, host_name)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -605,6 +717,11 @@ class UtilFuncs(object):
 # print(df.columns)
 # print(df.head(3))
 
+# from airflow.providers.postgres.hooks.postgres import PostgresHook
+# pgsql_hook = PostgresHook(postgres_conn_id=con.TXY800_PGSQL_CONN_ID)
+# pg_conn = pgsql_hook.get_conn()
+
+# UtilFuncs.insert_data_from_csv(pg_conn, '/tmp/ak_data/stock_board_concept_name_em.csv', f'ak_dg_stock_board_concept_name_em')
 
 # from airflow.providers.redis.hooks.redis import RedisHook
 # REDIS_CONN_ID = "local_redis_3"
@@ -613,17 +730,17 @@ class UtilFuncs(object):
 # print(s_code_list)
 
 
-from dg_ak.store_daily.stock.ak_dg_stock_config import stock_cols_config
-s_df = UtilFuncs.get_s_code_data('stock_zh_a_hist', stock_cols_config['stock_zh_a_hist'], s_code='000004', period='daily', start_date='20240101', end_date='20240424', adjust="")
-hfq_s_df = UtilFuncs.get_s_code_data('stock_zh_a_hist', stock_cols_config['stock_zh_a_hist'], s_code='000004', period='daily', start_date='20240101', end_date='20240424', adjust='hfq')
-s_df.set_index('td', inplace=True)
-hfq_s_df.set_index('td', inplace=True)
-hfq_s_df = hfq_s_df.add_suffix('_hfq')
-print(s_df.head(1))
-print(hfq_s_df.head(1))
-merged_df = pd.merge(s_df, hfq_s_df, left_index=True, right_index=True, how='outer')
-print(merged_df[['o', 'o_hfq', 'c', 'c_hfq']].head())
-print(merged_df[['o', 'o_hfq', 'c', 'c_hfq']].tail())
+# from dg_ak.store_daily.stock.ak_dg_stock_config import stock_cols_config
+# s_df = UtilFuncs.get_s_code_data('stock_zh_a_hist', stock_cols_config['stock_zh_a_hist'], s_code='000004', period='daily', start_date='20240101', end_date='20240424', adjust="")
+# hfq_s_df = UtilFuncs.get_s_code_data('stock_zh_a_hist', stock_cols_config['stock_zh_a_hist'], s_code='000004', period='daily', start_date='20240101', end_date='20240424', adjust='hfq')
+# s_df.set_index('td', inplace=True)
+# hfq_s_df.set_index('td', inplace=True)
+# hfq_s_df = hfq_s_df.add_suffix('_hfq')
+# print(s_df.head(1))
+# print(hfq_s_df.head(1))
+# merged_df = pd.merge(s_df, hfq_s_df, left_index=True, right_index=True, how='outer')
+# print(merged_df[['o', 'o_hfq', 'c', 'c_hfq']].head())
+# print(merged_df[['o', 'o_hfq', 'c', 'c_hfq']].tail())
 
 # print(UtilFuncs.generate_dt_list('2024-04-01','2024-04-10',dt_format='%Y%m%d'))
 ##################################################

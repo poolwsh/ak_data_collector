@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import sys
 import os
-from datetime import timedelta
+from pathlib import Path
+from datetime import timedelta, datetime, date
 from dg_ak.utils.util_funcs import UtilFuncs as uf
 from dg_ak.utils.logger import logger
+import pandas as pd
 import dg_ak.utils.config as con
 
 from airflow.exceptions import AirflowException
@@ -17,13 +20,22 @@ redis_hook = RedisHook(redis_conn_id=con.REDIS_CONN_ID)
 pgsql_hook = PostgresHook(postgres_conn_id=con.TXY800_PGSQL_CONN_ID)
 pg_conn = pgsql_hook.get_conn()
 
+config_path = Path(__file__).resolve().parent / 'ak_dg_board_config.py'
+sys.path.append(config_path.parent.as_posix())
+ak_cols_config_dict = uf.load_ak_cols_config(config_path.as_posix())
+
 # region 板块
 # 行业板块 (Industry Sector) & 概念板块 (Concept Sector) 
 def get_board_list(ti, ak_func_name: str):
     logger.info(f"Downloading board list for {ak_func_name}")
     try:
         # 获取今天的板块数据
-        board_list_data_df = uf.get_data_today(ak_func_name)
+        board_list_data_df = uf.get_data_today(ak_func_name, ak_cols_config_dict)
+        board_list_data_df = uf.convert_columns(board_list_data_df, f'ak_dg_{ak_func_name}', pg_conn, redis_hook.get_conn())
+        # Ensure the 'date' column is in datetime format and properly formatted
+        if 'date' in board_list_data_df.columns:
+            board_list_data_df['date'] = pd.to_datetime(board_list_data_df['date'], errors='coerce').dt.strftime('%Y-%m-%d')
+        
         if board_list_data_df.empty:
             logger.warning(f"No data retrieved for {ak_func_name}")
             return
@@ -32,24 +44,24 @@ def get_board_list(ti, ak_func_name: str):
         uf.write_df_to_redis(_redis_key, board_list_data_df, redis_hook.get_conn(), uf.default_redis_ttl)
         uf.push_data(ti, f'{ak_func_name}_board_list', _redis_key)
 
-        # 保存数据到CSV
-        temp_csv_path = uf.save_data_to_csv(board_list_data_df, ak_func_name)
+        # 保存数据到CSV without the header
+        temp_csv_path = uf.save_data_to_csv(board_list_data_df, ak_func_name, include_header=True)
         if temp_csv_path is None:
             logger.warning(f"No CSV file created for {ak_func_name}, skipping database insertion.")
             return
         
         # 将数据从CSV导入数据库
-        uf.insert_data_from_csv(pg_conn, temp_csv_path, ak_func_name)
+        uf.insert_data_from_csv(pg_conn, temp_csv_path, f'ak_dg_{ak_func_name}')
 
     except Exception as e:
         logger.error(f"Failed to process data for {ak_func_name}: {str(e)}")
         pg_conn.rollback()
         raise AirflowException(e)
 
-    finally:
-        if 'temp_csv_path' in locals() and os.path.exists(temp_csv_path):
-            os.remove(temp_csv_path)
-            logger.info(f"Temporary CSV file {temp_csv_path} has been removed.")
+    # finally:
+    #     if 'temp_csv_path' in locals() and os.path.exists(temp_csv_path):
+    #         os.remove(temp_csv_path)
+    #         logger.info(f"Temporary CSV file {temp_csv_path} has been removed.")
 
 def store_board_list(ti, ak_func_name):
     logger.info(f"Starting data storage operations for {ak_func_name}")
@@ -59,60 +71,60 @@ def store_board_list(ti, ak_func_name):
         INSERT INTO ak_dg_{ak_func_name}_store
         SELECT * FROM ak_dg_{ak_func_name}
         ON CONFLICT (date, b_code) DO NOTHING
-        RETURNING date, b_code;
+        RETURNING date;
     """
 
     try:
         _inserted_rows = uf.store_ak_data(pg_conn, ak_func_name, insert_sql, truncate=True)
-
-        _keys = {(row[0], row[1]) for row in _inserted_rows}
-        uf.push_data(ti, f'{ak_func_name}_stored_keys', list(_keys))
-        logger.info("Data operation completed successfully for {ak_func_name}.")
+        logger.debug(_inserted_rows)
+        _dates = list(set(row[0] for row in _inserted_rows))
+        logger.debug(_dates)
+        uf.push_data(ti, f'{ak_func_name}_stored_keys', _dates)
+        logger.info(f"Data operation completed successfully for {ak_func_name}. Dates: {_dates}")
     except Exception as e:
         logger.error(f"Failed during data operations for {ak_func_name}: {str(e)}")
         raise AirflowException(e)
 
 def save_tracing_board_list(ti, ak_func_name):
     date_list = uf.pull_data(ti, f'{ak_func_name}_stored_keys')
+    logger.info(date_list)
     if not date_list:
         logger.info(f"No dates to process for {ak_func_name}")
         return
 
-    # Convert dates to tracing data structure and insert
     uf.insert_tracing_date_data(pg_conn, ak_func_name, date_list)
     logger.info(f"Tracing data saved for {ak_func_name} on dates: {date_list}")
 
-
-def get_board_cons(ti, ak_func_name):
-    logger.info(f"Starting to save data for {ak_func_name}")
+def get_board_cons(cons_func_name, list_func_name):
+    logger.info(f"Starting to save data for {cons_func_name}")
     try:
-        # 从XCom获取Redis键
-        _redis_key = ti.xcom_pull(task_ids=f'get_board_list({ak_func_name})', key=f'{ak_func_name}_board_list')
+        _redis_key = f'{list_func_name}_board_list'
         
-        # 从Redis获取日期数据
-        _date_df = uf.get_dates_from_redis(_redis_key, redis_hook.get_conn())
-        if _date_df.empty:
-            logger.warning(f"No dates available for {ak_func_name}, skipping data fetch.")
-            return
-        _board_cons_df = uf.get_data_by_board_names(ak_func_name, _date_df['b_name'])
-         # 保存数据到CSV
-        temp_csv_path = uf.save_data_to_csv(_board_cons_df, ak_func_name)
+        _board_list_df = uf.get_df_from_redis(_redis_key, redis_hook.get_conn())
+        if _board_list_df.empty:
+            raise AirflowException(f"No dates available for {list_func_name}, skipping data fetch.")
+        _board_cons_df = uf.get_data_by_board_names(cons_func_name, ak_cols_config_dict, _board_list_df['b_name'])
+        logger.debug(_board_cons_df.columns)
+        _board_cons_df = uf.convert_columns(_board_cons_df, f'ak_dg_{cons_func_name}', pg_conn, redis_hook.get_conn())
+        if 'date' in _board_cons_df.columns:
+            _board_cons_df['date'] = pd.to_datetime(_board_cons_df['date'], errors='coerce').dt.strftime('%Y-%m-%d')
+        
+        temp_csv_path = uf.save_data_to_csv(_board_cons_df, cons_func_name)
         if temp_csv_path is None:
-            logger.warning(f"No CSV file created for {ak_func_name}, skipping database insertion.")
-            return
+            raise AirflowException(f"No CSV file created for {cons_func_name}, skipping database insertion.")
         
         # 将数据从CSV导入数据库
-        uf.insert_data_from_csv(pg_conn, temp_csv_path, ak_func_name)
+        uf.insert_data_from_csv(pg_conn, temp_csv_path, f'ak_dg_{cons_func_name}')
 
     except Exception as e:
-        logger.error(f"Failed to process data for {ak_func_name}: {str(e)}")
+        logger.error(f"Failed to process data for {cons_func_name}: {str(e)}")
         pg_conn.rollback()
         raise AirflowException(e)
 
-    finally:
-        if 'temp_csv_path' in locals() and os.path.exists(temp_csv_path):
-            os.remove(temp_csv_path)
-            logger.info(f"Temporary CSV file {temp_csv_path} has been removed.")
+    # finally:
+    #     if 'temp_csv_path' in locals() and os.path.exists(temp_csv_path):
+    #         os.remove(temp_csv_path)
+    #         logger.info(f"Temporary CSV file {temp_csv_path} has been removed.")
 
 def store_board_cons(ti, ak_func_name):
     logger.info(f"Starting data storage operations for {ak_func_name}")
@@ -122,19 +134,18 @@ def store_board_cons(ti, ak_func_name):
         INSERT INTO ak_dg_{ak_func_name}_store
         SELECT * FROM ak_dg_{ak_func_name}
         ON CONFLICT (date, s_code, b_name) DO NOTHING
-        RETURNING date, s_code, b_name;
+        RETURNING date, b_name;
     """
 
     try:
         _inserted_rows = uf.store_ak_data(pg_conn, ak_func_name, insert_sql, truncate=True)
-
-        _keys = {(row[0], row[1]) for row in _inserted_rows}
+        _keys = list(set({(row[0], row[1]) for row in _inserted_rows}))
         uf.push_data(ti, f'{ak_func_name}_stored_keys', list(_keys))
-        logger.info("Data operation completed successfully for {ak_func_name}.")
+        logger.info(f"Data operation completed successfully for {ak_func_name}.")
     except Exception as e:
         logger.error(f"Failed during data operations for {ak_func_name}: {str(e)}")
         raise AirflowException(e)
-    
+
 def save_tracing_board_cons(ti, ak_func_name, param_name):
     cons_data = uf.pull_data(ti, f'{ak_func_name}_stored_keys')
     if not cons_data:
@@ -142,13 +153,11 @@ def save_tracing_board_cons(ti, ak_func_name, param_name):
         return
 
     # Flatten the data to prepare for insertion
-    data_to_insert = []
-    for date, param_values in cons_data.items():
-        for param_value in param_values:
-            data_to_insert.append((ak_func_name, date, param_name, param_value))
+    # data_to_insert = []
+    # for date, param_value in cons_data:
+    #     data_to_insert.append((ak_func_name, date, param_name, param_value))
 
-    # Convert to tracing data structure and insert
-    uf.insert_tracing_date_1_param_data(pg_conn, data_to_insert)
+    uf.insert_tracing_date_1_param_data(pg_conn, ak_func_name, param_name, cons_data)
     logger.info(f"Tracing data saved for {ak_func_name} with parameter data.")
 
 def generate_dag(board_list_func, board_con_func):
@@ -197,7 +206,7 @@ def generate_dag(board_list_func, board_con_func):
         'get_board_cons':PythonOperator(
             task_id=f'get_board_cons-{board_con_func}',
             python_callable=get_board_cons,
-            op_kwargs={'ak_func_name': board_con_func},
+            op_kwargs={'cons_func_name': board_con_func, 'list_func_name':board_list_func},
             dag=dag,
         ),
         'store_board_cons':PythonOperator(
@@ -209,7 +218,7 @@ def generate_dag(board_list_func, board_con_func):
         'save_tracing_board_cons':PythonOperator(
             task_id=f'save_tracing_board_cons-{board_con_func}',
             python_callable=save_tracing_board_cons,
-            op_kwargs={'ak_func_name': board_con_func, 'param_name': 'board_cons'},
+            op_kwargs={'ak_func_name': board_con_func, 'param_name': 'symbol'},
             dag=dag,
         )
     }

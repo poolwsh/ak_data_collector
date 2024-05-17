@@ -141,9 +141,9 @@ class UtilTools(object):
         return dict(zip(removed_elements_list, ak_func_json["en_list"]))
 
     @staticmethod
-    def remove_cols(df: pd.DataFrame, ak_func_json: dict) -> pd.DataFrame:
-        if len(ak_func_json["remove_list"]) > 0:
-            return df.drop(ak_func_json["remove_list"], axis=1, inplace=False)
+    def remove_cols(df: pd.DataFrame, ak_cols_config_dict: dict) -> pd.DataFrame:
+        if len(ak_cols_config_dict["remove_list"]) > 0:
+            return df.drop(ak_cols_config_dict["remove_list"], axis=1, inplace=False)
         return df
 
     @staticmethod
