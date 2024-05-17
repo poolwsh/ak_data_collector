@@ -1,4 +1,4 @@
-# 使用akshare接口，读取板块相关数据并保存到对应的表中： 
+# 使用akshare接口，读取涨跌停相关数据并保存到对应的表中： 
 ## stock_zt_pool_dtgc_em
 ```python
 import akshare
