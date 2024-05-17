@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 from dg_ak.utils.util_funcs import UtilFuncs as uf
 from dg_ak.utils.logger import logger
+import dg_ak.utils.config as con
 
 from airflow.exceptions import AirflowException
 from airflow.models.dag import DAG
@@ -14,12 +15,9 @@ from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.redis.hooks.redis import RedisHook
 from airflow.utils.dates import days_ago
 
-POSTGRES_CONN_ID = "local_pgsql"
-TXY800_PGSQL_CONN_ID = "txy800_pgsql_ak"
-REDIS_CONN_ID = "local_redis_3"
 
-redis_hook = RedisHook(redis_conn_id=REDIS_CONN_ID)
-pgsql_hook = PostgresHook(postgres_conn_id=TXY800_PGSQL_CONN_ID)
+redis_hook = RedisHook(redis_conn_id=con.REDIS_CONN_ID)
+pgsql_hook = PostgresHook(postgres_conn_id=con.TXY800_PGSQL_CONN_ID)
 pg_conn = pgsql_hook.get_conn()
 
 
@@ -82,7 +80,6 @@ def store_zdt_data(ti, ak_func_name: str):
         logger.error(f"Failed during copy and clean operations for {ak_func_name}: {str(e)}")
         raise AirflowException(e)
 
-    
 # def store_ak_data(ti, ak_func_name):
 #     logger.info(f"Starting copy and clean data operations for {ak_func_name}")
 
