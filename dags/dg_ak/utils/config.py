@@ -10,3 +10,5 @@ DEFAULT_RETRY_DELAY = 5  # in minutes
 STOCK_A_REALTIME_KEY= "stock_a_realtime"
 
 POSSIBLE_CODE_COLUMNS = ['s_code', 'stock_code']
+
+LOGGER_DEBUG = False
