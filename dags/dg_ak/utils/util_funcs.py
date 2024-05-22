@@ -302,7 +302,7 @@ class UtilFuncs(UtilTools):
                 logger.error(f"Error calling function {ak_func.__name__} with parameters: {_param_dict}. Error: {_e}")
                 raise AirflowException()
         logger.error(f'Failed to call function {ak_func.__name__} after {num_retries} attempts with parameters: {_param_dict}')
-        raise AirflowException(f'Function {ak_func.__name__} failed after {num_retries} attempts')
+        return None
 
 
 
@@ -323,11 +323,10 @@ class UtilFuncs(UtilTools):
                 if _df is None:
                     _error_msg = f'Data function {ak_func_name} returned None for today ({_today_date}).'
                     logger.error(_error_msg)
-                    raise AirflowException(_error_msg)
                 else:
                     _warning_msg = f'No data found for {ak_func_name} for today ({_today_date}).'
                     logger.warning(_warning_msg)
-                    return pd.DataFrame()  # Return empty DataFrame to avoid further errors
+                return pd.DataFrame()  # Return empty DataFrame to avoid further errors
 
             _df = UtilTools.remove_cols(_df, ak_cols_config_dict[ak_func_name])
             _df.rename(columns=UtilTools.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)

@@ -9,7 +9,7 @@ from functools import partial
 from sqlalchemy import create_engine
 
 
-from dg_ak.store_daily.util_funcs import UtilFuncs as uf
+from dg_ak.utils.util_funcs import UtilFuncs as uf
 
 from airflow.models.dag import DAG
 from airflow.operators.python import PythonOperator, ExternalPythonOperator
@@ -121,47 +121,47 @@ def save_ak_zt_pool_em1(ti):
         _conn.close()
     pass
 
-with DAG(
-    dag_id="ak_refresh_cache",
-    default_args={
-        "owner": "wsh",
-        "depends_on_past": False,
-        "email": ["mxgzmxgz@gmail.com"],
-        "email_on_failure": False,
-        "email_on_retry": False,
-        "retries": 1,
-        "retry_delay": timedelta(minutes=5),
-    },
-    # [END default_args]
-    description="利用akshare下载每日数据.",
-    schedule="15 15 * * *",
-    start_date=datetime(2024, 4, 1),
-    catchup=False,
-    tags=["akshare", "daily"],
-    max_active_runs=1,
-    params={
-        #  "stocks": ['a'],
-        #  "my_int_param": 6
-     },
-) as dag:
-    # [END instantiate_dag]
-    dag.doc_md = """
-    依据设定每日运行，下载相关数据
-    """  # otherwise, type it like this
+# with DAG(
+#     dag_id="ak_refresh_cache",
+#     default_args={
+#         "owner": "wsh",
+#         "depends_on_past": False,
+#         "email": ["mxgzmxgz@gmail.com"],
+#         "email_on_failure": False,
+#         "email_on_retry": False,
+#         "retries": 1,
+#         "retry_delay": timedelta(minutes=5),
+#     },
+#     # [END default_args]
+#     description="利用akshare下载每日数据.",
+#     schedule="15 15 * * *",
+#     start_date=datetime(2024, 4, 1),
+#     catchup=False,
+#     tags=["akshare", "daily"],
+#     max_active_runs=1,
+#     params={
+#         #  "stocks": ['a'],
+#         #  "my_int_param": 6
+#      },
+# ) as dag:
+#     # [END instantiate_dag]
+#     dag.doc_md = """
+#     依据设定每日运行，下载相关数据
+#     """  # otherwise, type it like this
 
-    ak_zt_pool_em_downdload_task = PythonOperator(
-        task_id = "ak_zt_pool_em_downdload",
-        python_callable=download_and_cache_stock_zt_pool_em_by_td,
-        op_kwargs={'td': '{{ ds }}', 'redis_conn': redis_hook.get_conn(), 'ttl': uf.default_redis_ttl},
-        provide_context=True
-    )
+#     ak_zt_pool_em_downdload_task = PythonOperator(
+#         task_id = "ak_zt_pool_em_downdload",
+#         python_callable=download_and_cache_stock_zt_pool_em_by_td,
+#         op_kwargs={'td': '{{ ds }}', 'redis_conn': redis_hook.get_conn(), 'ttl': uf.default_redis_ttl},
+#         provide_context=True
+#     )
 
-    ak_zt_pool_em_save_task = PythonOperator(
-        task_id = "ak_zt_pool_em_save",
-        python_callable=save_df_to_postgres,
-        # python='/data/.virtualenvs/jpt_lab/bin/python3',
-        provide_context=True,
-    )
+#     ak_zt_pool_em_save_task = PythonOperator(
+#         task_id = "ak_zt_pool_em_save",
+#         python_callable=save_df_to_postgres,
+#         # python='/data/.virtualenvs/jpt_lab/bin/python3',
+#         provide_context=True,
+#     )
 
 
-    ak_zt_pool_em_downdload_task >> ak_zt_pool_em_save_task
+#     ak_zt_pool_em_downdload_task >> ak_zt_pool_em_save_task
