@@ -1,4 +1,5 @@
 
+import random
 import pandas as pd
 import numpy as np
 import json as js
@@ -76,18 +77,20 @@ class UtilTools(object):
         if isinstance(td, date):
             return td.strftime('%Y%m%d')
         if isinstance(td, str):
-            if len(td) == 8:
-                try:
-                    datetime.strptime(td, '%Y%m%d')
-                    return td
-                except ValueError:
-                    pass
-            if len(td) == 10:
-                try:
-                    datetime.strptime(td, '%Y-%m-%d')
-                    return td.replace('-', '')
-                except ValueError:
-                    pass
+            # 处理标准日期格式
+            try:
+                if 'T' in td:
+                    td = td.split('T')[0]
+                date_obj = datetime.strptime(td, '%Y-%m-%d')
+                return date_obj.strftime('%Y%m%d')
+            except ValueError:
+                pass
+            # 处理无分隔符的日期格式
+            try:
+                date_obj = datetime.strptime(td, '%Y%m%d')
+                return date_obj.strftime('%Y%m%d')
+            except ValueError:
+                pass
         raise ValueError(f"Invalid date format: {td}")
 
     @staticmethod
@@ -95,20 +98,22 @@ class UtilTools(object):
         if isinstance(td, date):
             return td.strftime('%Y-%m-%d')
         if isinstance(td, str):
-            if len(td) == 10:
-                try:
-                    datetime.strptime(td, '%Y-%m-%d')
-                    return td
-                except ValueError:
-                    pass
-            if len(td) == 8:
-                try:
-                    # 将字符串转换为日期对象验证，然后转换为标准格式
-                    date_obj = datetime.strptime(td, '%Y%m%d')
-                    return date_obj.strftime('%Y-%m-%d')
-                except ValueError:
-                    pass
+            # 处理标准日期格式
+            try:
+                if 'T' in td:
+                    td = td.split('T')[0]
+                date_obj = datetime.strptime(td, '%Y-%m-%d')
+                return date_obj.strftime('%Y-%m-%d')
+            except ValueError:
+                pass
+            # 处理无分隔符的日期格式
+            try:
+                date_obj = datetime.strptime(td, '%Y%m%d')
+                return date_obj.strftime('%Y-%m-%d')
+            except ValueError:
+                pass
         raise ValueError(f"Invalid date format: {td}")
+
 
     @staticmethod
     def try_to_td(maybe_td):
@@ -175,6 +180,10 @@ class UtilTools(object):
             keys = [s.replace('llv', f'llv{n}') for s in keys]
         return dict(zip(keys, [_min_value, _min_v_td, _td_diff, _chg]))
 
+    @staticmethod
+    def generate_random_minute_schedule(hour):
+        minute = random.randint(0, 59)
+        return f'{minute} {hour} * * *'
 # end region st
     
 ak_cols_config = {

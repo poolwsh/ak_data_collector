@@ -1,30 +1,26 @@
-
-
 DROP TABLE IF EXISTS ak_dg_stock_board_concept_name_ths;
 CREATE TABLE ak_dg_stock_board_concept_name_ths (
-    date DATE NOT NULL,
-    b_create_date DATE NOT NULL,
+    td DATE NOT NULL,
     b_code VARCHAR(50),
     b_name VARCHAR(255) NOT NULL,
     stock_count INT,
     url VARCHAR(255),
-    PRIMARY KEY (date,  b_code)
+    PRIMARY KEY (td, b_name)
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_board_concept_name_ths_store;
 CREATE TABLE ak_dg_stock_board_concept_name_ths_store (
-    date DATE NOT NULL,
-    b_create_date DATE NOT NULL,
+    td DATE NOT NULL,
     b_code VARCHAR(50),
     b_name VARCHAR(255) NOT NULL,
     stock_count INT,
     url VARCHAR(255),
-    PRIMARY KEY (date,  b_code)
+    PRIMARY KEY (td, b_name)
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_board_concept_name_em;
 CREATE TABLE ak_dg_stock_board_concept_name_em (
-    date DATE NOT NULL,
+    td DATE NOT NULL,
     rank INT,
     b_code VARCHAR(50),
     b_name VARCHAR(255),
@@ -37,12 +33,12 @@ CREATE TABLE ak_dg_stock_board_concept_name_em (
     fallers INT,
     leader_s VARCHAR(255),
     leader_s_change DECIMAL,
-    PRIMARY KEY (date, b_code)
+    PRIMARY KEY (td, b_name)
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_board_concept_name_em_store;
 CREATE TABLE ak_dg_stock_board_concept_name_em_store (
-    date DATE NOT NULL,
+    td DATE NOT NULL,
     rank INT,
     b_code VARCHAR(50),
     b_name VARCHAR(255),
@@ -55,12 +51,12 @@ CREATE TABLE ak_dg_stock_board_concept_name_em_store (
     fallers INT,
     leader_s VARCHAR(255),
     leader_s_change DECIMAL,
-    PRIMARY KEY (date, b_code)
+    PRIMARY KEY (td, b_name)
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_board_industry_summary_ths;
 CREATE TABLE ak_dg_stock_board_industry_summary_ths (
-    date DATE NOT NULL,
+    td DATE NOT NULL,
     b_name VARCHAR(255),
     change_percentage DECIMAL,
     v DECIMAL,
@@ -72,12 +68,12 @@ CREATE TABLE ak_dg_stock_board_industry_summary_ths (
     leader_s VARCHAR(255),
     leader_s_price DECIMAL,
     leader_s_change DECIMAL,
-    PRIMARY KEY (date, b_name)
+    PRIMARY KEY (td, b_name)
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_board_industry_summary_ths_store;
 CREATE TABLE ak_dg_stock_board_industry_summary_ths_store (
-    date DATE NOT NULL,
+    td DATE NOT NULL,
     b_name VARCHAR(255),
     change_percentage DECIMAL,
     v DECIMAL,
@@ -89,12 +85,12 @@ CREATE TABLE ak_dg_stock_board_industry_summary_ths_store (
     leader_s VARCHAR(255),
     leader_s_price DECIMAL,
     leader_s_change DECIMAL,
-    PRIMARY KEY (date, b_name)
+    PRIMARY KEY (td, b_name)
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_board_industry_name_em;
 CREATE TABLE ak_dg_stock_board_industry_name_em (
-    date DATE NOT NULL,
+    td DATE NOT NULL,
     rank INT,
     b_code VARCHAR(50),
     b_name VARCHAR(255),
@@ -107,12 +103,12 @@ CREATE TABLE ak_dg_stock_board_industry_name_em (
     fallers INT,
     leader_s VARCHAR(255),
     leader_s_change DECIMAL,
-    PRIMARY KEY (date, b_code)
+    PRIMARY KEY (td, b_name)
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_board_industry_name_em_store;
 CREATE TABLE ak_dg_stock_board_industry_name_em_store (
-    date DATE NOT NULL,
+    td DATE NOT NULL,
     rank INT,
     b_code VARCHAR(50),
     b_name VARCHAR(255),
@@ -125,48 +121,48 @@ CREATE TABLE ak_dg_stock_board_industry_name_em_store (
     fallers INT,
     leader_s VARCHAR(255),
     leader_s_change DECIMAL,
-    PRIMARY KEY (date, b_code)
+    PRIMARY KEY (td, b_name)
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_board_concept_cons_ths;
 CREATE TABLE ak_dg_stock_board_concept_cons_ths (
-    date DATE NOT NULL,
+    td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
     s_name VARCHAR(255) NOT NULL,
     b_name VARCHAR(255) NOT NULL,
-    PRIMARY KEY (date, s_code, b_name)
+    PRIMARY KEY (td, s_code, b_name)
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_board_concept_cons_ths_store;
 CREATE TABLE ak_dg_stock_board_concept_cons_ths_store (
-    date DATE NOT NULL,
+    td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
     s_name VARCHAR(255) NOT NULL,
     b_name VARCHAR(255) NOT NULL,
-    PRIMARY KEY (date, s_code, b_name)
+    PRIMARY KEY (td, s_code, b_name)
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_board_concept_cons_em;
 CREATE TABLE ak_dg_stock_board_concept_cons_em (
-    date DATE NOT NULL,
+    td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
     s_name VARCHAR(255) NOT NULL,
     b_name VARCHAR(255) NOT NULL,
-    PRIMARY KEY (date, s_code, b_name)
+    PRIMARY KEY (td, s_code, b_name)
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_board_concept_cons_em_store;
 CREATE TABLE ak_dg_stock_board_concept_cons_em_store (
-    date DATE NOT NULL,
+    td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
     s_name VARCHAR(255) NOT NULL,
     b_name VARCHAR(255) NOT NULL,
-    PRIMARY KEY (date, s_code, b_name)
+    PRIMARY KEY (td, s_code, b_name)
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_board_industry_cons_ths;
 CREATE TABLE ak_dg_stock_board_industry_cons_ths (
-    date DATE NOT NULL,
+    td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
     s_name VARCHAR(255) NOT NULL,
     b_name VARCHAR(255) NOT NULL,
@@ -181,12 +177,12 @@ CREATE TABLE ak_dg_stock_board_industry_cons_ths (
     circulating_shares VARCHAR(50),
     circulation_mv DECIMAL(20, 2),
     pe DECIMAL(10, 2),
-    PRIMARY KEY (date, s_code, b_name)
+    PRIMARY KEY (td, s_code, b_name)
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_board_industry_cons_ths_store;
 CREATE TABLE ak_dg_stock_board_industry_cons_ths_store (
-    date DATE NOT NULL,
+    td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
     s_name VARCHAR(255) NOT NULL,
     b_name VARCHAR(255) NOT NULL,
@@ -201,12 +197,12 @@ CREATE TABLE ak_dg_stock_board_industry_cons_ths_store (
     circulating_shares VARCHAR(50),
     circulation_mv DECIMAL(20, 2),
     pe DECIMAL(10, 2),
-    PRIMARY KEY (date, s_code, b_name)
+    PRIMARY KEY (td, s_code, b_name)
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_board_industry_cons_em;
 CREATE TABLE ak_dg_stock_board_industry_cons_em (
-    date DATE NOT NULL,
+    td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
     s_name VARCHAR(255) NOT NULL,
     b_name VARCHAR(255) NOT NULL,
@@ -223,12 +219,12 @@ CREATE TABLE ak_dg_stock_board_industry_cons_em (
     turnover_rate DECIMAL(10, 2),
     pe_dynamic DECIMAL(10, 2),
     pb DECIMAL(10, 2),
-    PRIMARY KEY (date, s_code, b_name)
+    PRIMARY KEY (td, s_code, b_name)
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_board_industry_cons_em_store;
 CREATE TABLE ak_dg_stock_board_industry_cons_em_store (
-    date DATE NOT NULL,
+    td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
     s_name VARCHAR(255) NOT NULL,
     b_name VARCHAR(255) NOT NULL,
@@ -245,5 +241,5 @@ CREATE TABLE ak_dg_stock_board_industry_cons_em_store (
     turnover_rate DECIMAL(10, 2),
     pe_dynamic DECIMAL(10, 2),
     pb DECIMAL(10, 2),
-    PRIMARY KEY (date, s_code, b_name)
+    PRIMARY KEY (td, s_code, b_name)
 );

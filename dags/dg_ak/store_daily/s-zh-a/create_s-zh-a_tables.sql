@@ -1,7 +1,7 @@
 DROP TABLE IF EXISTS ak_dg_stock_zh_a_hist_daily_bfq;
 CREATE TABLE ak_dg_stock_zh_a_hist_daily_bfq (
     s_code VARCHAR(20) NOT NULL,    -- 股票代码，作为主键的第一部分
-    date DATE NOT NULL,             -- 交易日期，作为主键的第二部分
+    td DATE NOT NULL,             -- 交易日期，作为主键的第二部分
     o FLOAT,                        -- 开盘价
     c FLOAT,                        -- 收盘价
     h FLOAT,                        -- 最高价
@@ -12,13 +12,13 @@ CREATE TABLE ak_dg_stock_zh_a_hist_daily_bfq (
     pct_chg FLOAT,                  -- 涨跌幅
     change FLOAT,                   -- 涨跌额
     turnover_rate FLOAT,            -- 换手率
-    PRIMARY KEY (s_code, date)      -- 组合主键：股票代码和交易日期
+    PRIMARY KEY (s_code, td)      -- 组合主键：股票代码和交易日期
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_zh_a_hist_store_daily_bfq;
 CREATE TABLE ak_dg_stock_zh_a_hist_store_daily_bfq (
     s_code VARCHAR(20) NOT NULL,    -- 股票代码，作为主键的第一部分
-    date DATE NOT NULL,             -- 交易日期，作为主键的第二部分
+    td DATE NOT NULL,             -- 交易日期，作为主键的第二部分
     o FLOAT,                        -- 开盘价
     c FLOAT,                        -- 收盘价
     h FLOAT,                        -- 最高价
@@ -29,13 +29,13 @@ CREATE TABLE ak_dg_stock_zh_a_hist_store_daily_bfq (
     pct_chg FLOAT,                  -- 涨跌幅
     change FLOAT,                   -- 涨跌额
     turnover_rate FLOAT,            -- 换手率
-    PRIMARY KEY (s_code, date)      -- 组合主键：股票代码和交易日期
+    PRIMARY KEY (s_code, td)      -- 组合主键：股票代码和交易日期
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_zh_a_hist_daily_hfq;
 CREATE TABLE ak_dg_stock_zh_a_hist_daily_hfq (
     s_code VARCHAR(20) NOT NULL,    -- 股票代码，作为主键的第一部分
-    date DATE NOT NULL,             -- 交易日期，作为主键的第二部分
+    td DATE NOT NULL,             -- 交易日期，作为主键的第二部分
     o FLOAT,                        -- 开盘价
     c FLOAT,                        -- 收盘价
     h FLOAT,                        -- 最高价
@@ -46,13 +46,13 @@ CREATE TABLE ak_dg_stock_zh_a_hist_daily_hfq (
     pct_chg FLOAT,                  -- 涨跌幅
     change FLOAT,                   -- 涨跌额
     turnover_rate FLOAT,            -- 换手率
-    PRIMARY KEY (s_code, date)      -- 组合主键：股票代码和交易日期
+    PRIMARY KEY (s_code, td)      -- 组合主键：股票代码和交易日期
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_zh_a_hist_store_daily_hfq;
 CREATE TABLE ak_dg_stock_zh_a_hist_store_daily_hfq (
     s_code VARCHAR(20) NOT NULL,    -- 股票代码，作为主键的第一部分
-    date DATE NOT NULL,             -- 交易日期，作为主键的第二部分
+    td DATE NOT NULL,             -- 交易日期，作为主键的第二部分
     o FLOAT,                        -- 开盘价
     c FLOAT,                        -- 收盘价
     h FLOAT,                        -- 最高价
@@ -63,7 +63,7 @@ CREATE TABLE ak_dg_stock_zh_a_hist_store_daily_hfq (
     pct_chg FLOAT,                  -- 涨跌幅
     change FLOAT,                   -- 涨跌额
     turnover_rate FLOAT,            -- 换手率
-    PRIMARY KEY (s_code, date)      -- 组合主键：股票代码和交易日期
+    PRIMARY KEY (s_code, td)      -- 组合主键：股票代码和交易日期
 );
 
 DROP TABLE IF EXISTS ak_dg_stock_zh_a_trade_date;

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import sys
 import os
 import socket
@@ -71,23 +73,23 @@ def insert_data_to_db(df: pd.DataFrame, table_name: str, batch_size: int = 5000)
 
 def update_tracing_data(ak_func_name: str, period: str, adjust: str, s_code: str, stock_data_df: pd.DataFrame):
     try:
-        last_date = stock_data_df['date'].max()
-        if not last_date:
+        last_td = stock_data_df['td'].max()
+        if not last_td:
             return
 
-        date_value = (ak_func_name, s_code, period, adjust, last_date, datetime.now(), datetime.now(), os.getenv('HOSTNAME', socket.gethostname()))
+        date_value = (ak_func_name, s_code, period, adjust, last_td, datetime.now(), datetime.now(), os.getenv('HOSTNAME', socket.gethostname()))
         
         insert_sql = f"""
-            INSERT INTO {TRACING_TABLE_NAME} (ak_func_name, scode, period, adjust, last_date, create_time, update_time, host_name)
+            INSERT INTO {TRACING_TABLE_NAME} (ak_func_name, scode, period, adjust, last_td, create_time, update_time, host_name)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (ak_func_name, scode, period, adjust) DO UPDATE 
-            SET last_date = EXCLUDED.last_date, update_time = EXCLUDED.update_time;
+            SET last_td = EXCLUDED.last_td, update_time = EXCLUDED.update_time;
         """
         cursor = pg_conn.cursor()
         cursor.execute(insert_sql, date_value)
         pg_conn.commit()
         cursor.close()
-        logger.info(f"Tracing data updated for s_code={s_code} with last_date={last_date}")
+        logger.info(f"Tracing data updated for s_code={s_code} with last_td={last_td}")
     except Exception as e:
         logger.error(f"Failed to update tracing data for s_code={s_code}: {str(e)}")
         pg_conn.rollback()
@@ -162,12 +164,12 @@ def init_ak_dg_s_zh_a(ak_func_name: str, period: str, adjust: str):
             if not stock_data_df.empty:
                 stock_data_df['s_code'] = stock_data_df['s_code'].astype(str)
                 stock_data_df = uf.convert_columns(stock_data_df, f'ak_dg_{ak_func_name}_store_{period}_{adjust}', pg_conn, redis_hook.get_conn())
-                if 'date' in stock_data_df.columns:
-                    stock_data_df['date'] = pd.to_datetime(stock_data_df['date'], errors='coerce').dt.strftime('%Y-%m-%d')
+                if 'td' in stock_data_df.columns:
+                    stock_data_df['td'] = pd.to_datetime(stock_data_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
 
                 insert_data_to_db(stock_data_df, f'ak_dg_{ak_func_name}_store_{period}_{adjust}')
                 update_tracing_data(ak_func_name, period, adjust, s_code, stock_data_df)
-                all_trade_dates.update(stock_data_df['date'].tolist())
+                all_trade_dates.update(stock_data_df['td'].tolist())
 
                 if LOGGER_DEBUG:
                     logger.debug(f"Stock data for s_code={s_code}: {stock_data_df.shape[0]} rows\n{stock_data_df.head(5).to_string(index=False)}")

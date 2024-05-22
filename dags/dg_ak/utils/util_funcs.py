@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional, Union
 
 import dg_ak.utils.config as con
-from dg_ak.utils.utils import UtilTools as ut
+from dg_ak.utils.utils import UtilTools
 from dg_ak.utils.logger import logger
 
 from airflow.exceptions import AirflowException
@@ -21,8 +21,10 @@ from airflow.exceptions import AirflowException
 # Logger debug switch
 LOGGER_DEBUG = con.LOGGER_DEBUG
 
+class DateOutOfRangeException(Exception):
+    pass
 
-class UtilFuncs(object):
+class UtilFuncs(UtilTools):
     default_redis_ttl = 60 * 60  # 1 hour
     default_pause_time = 0.2  # 200ms
 
@@ -120,8 +122,8 @@ class UtilFuncs(object):
 
         if LOGGER_DEBUG:
             logger.debug(f"Removing unnecessary columns for ak_func_name: {ak_func_name}")
-        _s_df = ut.remove_cols(_s_df, ak_cols_config_dict[ak_func_name])
-        _s_df.rename(columns=ut.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
+        _s_df = UtilTools.remove_cols(_s_df, ak_cols_config_dict[ak_func_name])
+        _s_df.rename(columns=UtilTools.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
         _s_df['s_code'] = s_code
         if LOGGER_DEBUG:
             logger.debug(f'Processed s_code data for {s_code}, length: {len(_s_df)}, first 5 rows: {_s_df.head().to_dict(orient="records")}')
@@ -178,17 +180,45 @@ class UtilFuncs(object):
             raise AirflowException(f"Failed to retrieve trade dates: {_e}")
 
     @staticmethod
-    def get_data_and_save2csv(redis_key, ak_func_name, pg_conn, redis_conn, temp_dir='/tmp/ak_dg'):
+    def is_valid_date(date, ak_func_name):
+        try:
+            _ak_func = getattr(ak, ak_func_name, None)
+            if _ak_func:
+                _ak_func(date=date)
+            return True
+        except ValueError as ve:
+            if "Length mismatch" in str(ve):
+                logger.warning(f"Date {date} is out of range for function {ak_func_name}")
+                return False
+        except Exception as e:
+            logger.error(f"Error validating date {date} for function {ak_func_name}: {e}")
+            return False
+        return True
+
+    @staticmethod
+    def get_data_and_save2csv(redis_key, ak_func_name, ak_cols_config_dict, pg_conn, redis_conn, temp_dir='/tmp/ak_dg'):
         if LOGGER_DEBUG:
             logger.debug(f"Fetching data for redis_key: {redis_key}, ak_func_name: {ak_func_name}")
         _table_name = f"ak_dg_{ak_func_name}"
         _date_df = UtilFuncs.read_df_from_redis(redis_key, redis_conn)
 
-        _date_list = [ut.format_td8(_date) for _date in _date_df['Date'].sort_values(ascending=False).tolist()]
-        logger.debug(f"date_list length: {len(_date_list)}, first 5 dates: {_date_list[:5]}")
-        _ak_data_df = UtilFuncs.get_data_by_td_list(ak_func_name, _date_list)
-        _desired_columns = UtilFuncs.get_columns_from_table(pg_conn, _table_name)
-        _ak_data_df = _ak_data_df[_desired_columns]
+        _date_list = [UtilTools.format_td8(_date) for _date in _date_df['td'].sort_values(ascending=False).tolist()]
+        if LOGGER_DEBUG:
+            logger.debug(f"date_list length: {len(_date_list)}, first 5 dates: {_date_list[:5]}")
+        
+        # Check if dates are within the valid range
+        _date_list = [date for date in _date_list if UtilFuncs.is_valid_date(date, ak_func_name)]
+
+        _ak_data_df = UtilFuncs.get_data_by_td_list(ak_func_name, ak_cols_config_dict, _date_list)
+        
+        # Flatten the tuple list into column names
+        _desired_columns = [col[0] for col in UtilFuncs.get_columns_from_table(pg_conn, _table_name, redis_conn)]
+        
+        try:
+            _ak_data_df = _ak_data_df[_desired_columns]
+        except KeyError as e:
+            logger.error(f"KeyError while selecting columns for {ak_func_name}: {str(e)}")
+            raise
 
         os.makedirs(temp_dir, exist_ok=True)
         _temp_csv_path = os.path.join(temp_dir, f'{ak_func_name}.csv')
@@ -198,25 +228,6 @@ class UtilFuncs(object):
             logger.debug(f"Data saved to CSV at {_temp_csv_path}, length: {len(_ak_data_df)}, first 5 rows: {_ak_data_df.head().to_dict(orient='records')}")
         return _temp_csv_path
 
-    @staticmethod
-    def get_columns_from_table(pg_conn, table_name):
-        _columns = []
-        _cursor = pg_conn.cursor()
-        if LOGGER_DEBUG:
-            logger.debug(f"Fetching column names for table: {table_name}")
-        try:
-            _cursor.execute(
-                "SELECT column_name FROM information_schema.columns WHERE table_name = %s ORDER BY ordinal_position",
-                (table_name,)
-            )
-            _columns = [row[0] for row in _cursor.fetchall()]
-            if LOGGER_DEBUG:
-                logger.debug(f"Columns for table {table_name}: {_columns}")
-        except Exception as _e:
-            logger.error(f"Error fetching column names from table '{table_name}': {_e}")
-        finally:
-            _cursor.close()
-        return _columns
 
     @staticmethod
     def pref_s_code(s_code):
@@ -237,8 +248,8 @@ class UtilFuncs(object):
 
     @staticmethod
     def generate_dt_list(begin_dt, end_dt, dt_format='%Y-%m-%d', ascending=False):
-        _start = datetime.strptime(ut.format_td10(begin_dt), '%Y-%m-%d')
-        _end = datetime.strptime(ut.format_td10(end_dt), '%Y-%m-%d')
+        _start = datetime.strptime(UtilTools.format_td10(begin_dt), '%Y-%m-%d')
+        _end = datetime.strptime(UtilTools.format_td10(end_dt), '%Y-%m-%d')
         _date_list = []
         if ascending:
             while _start <= _end:
@@ -251,6 +262,7 @@ class UtilFuncs(object):
         if LOGGER_DEBUG:
             logger.debug(f"Generated date list length: {len(_date_list)}, first 5 dates: {_date_list[:5]}")
         return _date_list
+
 
     @staticmethod
     def try_to_call(
@@ -276,11 +288,24 @@ class UtilFuncs(object):
                 _retry_delay = retry_delay * (1 + _attempt)
                 logger.warning(f"Attempt {_attempt + 1}: ConnectionError encountered. Retrying after {_retry_delay} seconds...")
                 time.sleep(_retry_delay)
+            except ValueError as ve:
+                if "Length mismatch" in str(ve):
+                    logger.error(f"Date range exceeded for function {ak_func.__name__} with params {_param_dict}.")
+                    raise DateOutOfRangeException(f"Date range exceeded for function {ak_func.__name__} with params {_param_dict}.")
+                elif "只能获取最近 30 个交易日的数据" in str(ve):
+                    logger.error(f"ValueError calling function {ak_func.__name__} with parameters: {_param_dict}. Error: {ve}")
+                    raise DateOutOfRangeException(f"ValueError calling function {ak_func.__name__} with parameters: {_param_dict}. Error: {ve}")
+                else:
+                    logger.error(f"ValueError calling function {ak_func.__name__} with parameters: {_param_dict}. Error: {ve}")
+                    raise AirflowException()
             except Exception as _e:
                 logger.error(f"Error calling function {ak_func.__name__} with parameters: {_param_dict}. Error: {_e}")
                 raise AirflowException()
         logger.error(f'Failed to call function {ak_func.__name__} after {num_retries} attempts with parameters: {_param_dict}')
-        # raise AirflowException(f'Function {ak_func.__name__} failed after {num_retries} attempts')
+        raise AirflowException(f'Function {ak_func.__name__} failed after {num_retries} attempts')
+
+
+
 
     @staticmethod
     def get_data_today(ak_func_name: str, ak_cols_config_dict: dict, date_format: str = '%Y-%m-%d') -> pd.DataFrame:
@@ -304,9 +329,9 @@ class UtilFuncs(object):
                     logger.warning(_warning_msg)
                     return pd.DataFrame()  # Return empty DataFrame to avoid further errors
 
-            _df = ut.remove_cols(_df, ak_cols_config_dict[ak_func_name])
-            _df.rename(columns=ut.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
-            _df['date'] = _today_date  # Add a new column 'date' with today's date
+            _df = UtilTools.remove_cols(_df, ak_cols_config_dict[ak_func_name])
+            _df.rename(columns=UtilTools.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
+            _df['td'] = _today_date  # Add a new column 'date' with today's date
             if LOGGER_DEBUG:
                 logger.debug(f"Retrieved data for today length: {len(_df)}, first 5 rows: {_df.head().to_dict(orient='records')}")
             return _df
@@ -334,15 +359,15 @@ class UtilFuncs(object):
                 logger.warning(_warning_msg)
             return pd.DataFrame()  # 返回空的 DataFrame，以避免进一步的处理出错
 
-        _df = ut.remove_cols(_df, ak_cols_config_dict[ak_func_name])
-        _df.rename(columns=ut.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
-        _df = ut.add_td(_df, td)
+        _df = UtilTools.remove_cols(_df, ak_cols_config_dict[ak_func_name])
+        _df.rename(columns=UtilTools.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
+        _df = UtilTools.add_td(_df, td)
         if LOGGER_DEBUG:
             logger.debug(f"Retrieved data for date {td}, length: {len(_df)}, first 5 rows: {_df.head().to_dict(orient='records')}")
         return _df
 
     @staticmethod
-    def get_data_by_td_list(ak_func_name: str, td_list: list[str], td_pa_name: str = 'date', max_retry=20) -> pd.DataFrame:
+    def get_data_by_td_list(ak_func_name: str, ak_cols_config_dict: dict,  td_list: list[str], td_pa_name: str = 'date', max_retry=20) -> pd.DataFrame:
         _combined_df = pd.DataFrame()
         _retry_count = 0
         if LOGGER_DEBUG:
@@ -350,7 +375,7 @@ class UtilFuncs(object):
 
         for _td in td_list:
             try:
-                _df = UtilFuncs.get_data_by_td(ak_func_name, _td, td_pa_name)
+                _df = UtilFuncs.get_data_by_td(ak_func_name, ak_cols_config_dict, _td, td_pa_name)
                 if _df.empty:
                     _retry_count += 1
                     if _retry_count >= max_retry:
@@ -360,6 +385,9 @@ class UtilFuncs(object):
                     continue
                 _combined_df = pd.concat([_combined_df, _df], ignore_index=True)
                 _retry_count = 0  # reset retry count after a successful fetch
+            except DateOutOfRangeException:
+                logger.warning(f"Data for date {_td} is out of range. Skipping this date.")
+                continue
             except AirflowException as _e:
                 logger.error(f"Error fetching data for date {_td}: {str(_e)}")
                 if _retry_count >= max_retry:
@@ -386,7 +414,7 @@ class UtilFuncs(object):
                     _data['b_name'] = _b_name  # Add the board name as a column to the DataFrame
                     all_data.append(_data)
                     if LOGGER_DEBUG:
-                        logger.debug(f"Retrieved data for board {_b_name}, length: {len(_data)}, first 5 rows: {_data.head().to_dict(orient='records')}")
+                        logger.debug(f"Retrieved data for board {_b_name}, length: {len(_data)}, rows: {_data.head().to_dict(orient='records')}")
                 else:
                     logger.warning(f"No data found for board {_b_name}")
             except Exception as _e:
@@ -394,10 +422,11 @@ class UtilFuncs(object):
 
         if all_data:
             _combined_df = pd.concat(all_data, ignore_index=True)
-            _combined_df = ut.remove_cols(_combined_df, ak_cols_config_dict[ak_func_name])
-            _combined_df.rename(columns=ut.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
+            _combined_df = UtilTools.remove_cols(_combined_df, ak_cols_config_dict[ak_func_name])
+            _combined_df.rename(columns=UtilTools.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
+            _combined_df['s_code'] = _combined_df['s_code'].astype(str) 
             _today_date = datetime.now().strftime(date_format)
-            _combined_df['date'] = _today_date
+            _combined_df['td'] = _today_date
             if LOGGER_DEBUG:
                 logger.debug(f"Combined data for all boards length: {len(_combined_df)}, first 5 rows: {_combined_df.head().to_dict(orient='records')}")
             return _combined_df
@@ -409,21 +438,25 @@ class UtilFuncs(object):
     @staticmethod
     def write_list_to_redis(key: str, data_list: list, conn: redis.Redis, ttl: int = default_redis_ttl):
         try:
-            _data_json = json.dumps(data_list)
+            # 转换日期对象为字符串
+            _data_list = [str(item) if isinstance(item, (datetime, date)) else item for item in data_list]
+            _data_json = json.dumps(_data_list)
             conn.setex(key, ttl, _data_json)
             logger.info(f"List written to Redis under key: {key} with TTL {ttl} seconds.")
             if LOGGER_DEBUG:
-                logger.debug(f"List length: {len(data_list)}, first 5 items: {data_list[:5]}")
+                logger.debug(f"List length: {len(_data_list)}, first 5 items: {_data_list[:5]}")
         except Exception as _e:
             logger.error(f"Error writing list to Redis: {str(_e)}")
             raise AirflowException(f"Error writing list to Redis: {str(_e)}")
+
 
     @staticmethod
     def read_list_from_redis(key: str, conn: redis.Redis) -> Optional[list]:
         try:
             _data_json = conn.get(key)
-            if _data_json:
+            if (_data_json):
                 _data_list = json.loads(_data_json)
+                _data_list = [datetime.strptime(item, '%Y-%m-%d').date() if len(item) == 10 else item for item in _data_list]
                 logger.info(f"List retrieved from Redis for key: {key}")
                 if LOGGER_DEBUG:
                     logger.debug(f"List length: {len(_data_list)}, first 5 items: {_data_list[:5]}")
@@ -476,7 +509,7 @@ class UtilFuncs(object):
             ttl: int = default_redis_ttl
     ) -> str:
         try:
-            _td = ut.format_td8(td)
+            _td = UtilTools.format_td8(td)
         except Exception as _e:
             logger.error(f"Error formatting date '{td}': {_e}\n{traceback.format_exc()}")
             raise AirflowException(f"Error formatting date '{td}': {_e}")
@@ -655,40 +688,47 @@ class UtilFuncs(object):
     def get_columns_from_table(pg_conn, table_name, redis_conn: redis.Redis, ttl: int = default_redis_ttl):
         _redis_key = f"columns_{table_name}"
         if LOGGER_DEBUG:
-            logger.debug(f"Fetching column names for table: {table_name}")
+            logger.debug(f"Fetching column names and types for table: {table_name}")
 
         try:
             _cached_columns = redis_conn.get(_redis_key)
             if _cached_columns:
                 _columns = json.loads(_cached_columns)
-                logger.info(f"Retrieved column names for table '{table_name}' from Redis.")
+                logger.info(f"Retrieved column names and types for table '{table_name}' from Redis.")
                 if LOGGER_DEBUG:
                     logger.debug(f"Cached columns length: {len(_columns)}, first 5 columns: {_columns[:5]}")
                 return _columns
         except Exception as _e:
-            logger.warning(f"Failed to read column names from Redis for table '{table_name}': {_e}")
+            logger.warning(f"Failed to read column names and types from Redis for table '{table_name}': {_e}")
 
         _columns = []
         _cursor = pg_conn.cursor()
         try:
             _cursor.execute(
-                "SELECT column_name FROM information_schema.columns WHERE table_name = %s ORDER BY ordinal_position",
+                """
+                SELECT column_name, data_type 
+                FROM information_schema.columns 
+                WHERE table_name = %s 
+                ORDER BY ordinal_position
+                """,
                 (table_name,)
             )
-            _columns = [row[0] for row in _cursor.fetchall()]
+            _columns = [(row[0], row[1]) for row in _cursor.fetchall()]
             try:
                 redis_conn.setex(_redis_key, ttl, json.dumps(_columns))
-                logger.info(f"Retrieved column names for table '{table_name}' from PostgreSQL and cached in Redis.")
+                logger.info(f"Retrieved column names and types for table '{table_name}' from PostgreSQL and cached in Redis.")
                 if LOGGER_DEBUG:
                     logger.debug(f"Columns for table {table_name} length: {len(_columns)}, first 5 columns: {_columns[:5]}")
             except Exception as _e:
-                logger.warning(f"Failed to cache column names in Redis for table '{table_name}': {_e}")
+                logger.warning(f"Failed to cache column names and types in Redis for table '{table_name}': {_e}")
         except Exception as _e:
-            logger.error(f"Error fetching column names from table '{table_name}': {_e}")
+            logger.error(f"Error fetching column names and types from table '{table_name}': {_e}")
         finally:
             _cursor.close()
 
         return _columns
+
+
 
     @staticmethod
     def convert_columns(df, table_name, pg_conn, redis_conn: redis.Redis):
@@ -696,10 +736,30 @@ class UtilFuncs(object):
         if LOGGER_DEBUG:
             logger.debug(f"Columns for table {table_name}: {_columns}")
         if _columns is None or len(_columns) < 1:
-            raise AirflowException(f"Can't found columns using table_name {table_name}")
+            raise AirflowException(f"Can't find columns using table_name {table_name}")
 
-        df = df[_columns]
+        # 提取列名和类型
+        column_names = [col[0] for col in _columns]
+        column_types = {col[0]: col[1] for col in _columns}
+
+        # 根据列名对 DataFrame 进行筛选
+        df = df[column_names]
+
+        # 根据类型信息进行转换
+        for col, col_type in column_types.items():
+            if col_type in ['bigint', 'integer']:
+                df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')  # 使用 Pandas 的整数类型
+            elif col_type in ['decimal', 'numeric']:
+                df[col] = pd.to_numeric(df[col], errors='coerce')  # 将无法转换的值转换为 NaN
+            elif col_type == 'boolean':
+                df[col] = df[col].astype(bool)
+            elif col_type == 'date':
+                df[col] = pd.to_datetime(df[col], errors='coerce').dt.date
+            elif col_type == 'timestamp':
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+
         return df
+
 
     # endregion store once
 
@@ -750,7 +810,7 @@ class UtilFuncs(object):
         logger.debug(f"in func 'get_date_list', current_df length: {len(_current_df)}, first 5 rows: {_current_df.head().to_dict(orient='records')}")
 
         if not _current_df.empty:
-            _current_date_list = _current_df['dt'].apply(ut.format_td10).tolist()
+            _current_date_list = _current_df['td'].apply(UtilTools.format_td10).tolist()
             logger.debug(f"in func 'get_date_list', current_date_list length: {len(_current_date_list)}, first 5 dates: {_current_date_list[:5]}")
         else:
             _current_date_list = []
@@ -763,8 +823,8 @@ class UtilFuncs(object):
     @staticmethod
     def get_tracing_by_date(pg_conn, key):
         _sql = """
-        SELECT ak_func_name, dt, create_time, update_time, category, is_active, host_name
-        FROM ak_dg_tracing_dt
+        SELECT ak_func_name, td, create_time, update_time, category, is_active, host_name
+        FROM ak_dg_tracing_by_date
         WHERE ak_func_name = %s;
         """
         if LOGGER_DEBUG:
@@ -777,7 +837,7 @@ class UtilFuncs(object):
             _df = pd.DataFrame(
                 _rows,
                 columns=[
-                    'ak_func_name', 'dt', 'create_time', 'update_time',
+                    'ak_func_name', 'td', 'create_time', 'update_time',
                     'category', 'is_active', 'host_name'
                 ])
             if LOGGER_DEBUG:
@@ -823,10 +883,12 @@ class UtilFuncs(object):
         for _date in date_list:
             _data.append((ak_func_name, _date, _current_time, _current_time, _host_name))
         _insert_sql = """
-            INSERT INTO ak_dg_tracing_date (ak_func_name, date, create_time, update_time, host_name)
+            INSERT INTO ak_dg_tracing_by_date (ak_func_name, last_td, create_time, update_time, host_name)
             VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (ak_func_name, date) DO UPDATE 
-            SET update_time = EXCLUDED.update_time;
+            ON CONFLICT (ak_func_name) DO UPDATE 
+            SET last_td = EXCLUDED.last_td,
+                update_time = EXCLUDED.update_time,
+                host_name = EXCLUDED.host_name;
             """
         if LOGGER_DEBUG:
             logger.debug(f"Prepared insert SQL for tracing date data: {_insert_sql}")
@@ -836,10 +898,12 @@ class UtilFuncs(object):
     def insert_tracing_date_1_param_data(conn, ak_func_name, param_name, date_values):
         _data = UtilFuncs.prepare_tracing_data(ak_func_name, param_name, date_values)
         _insert_sql = """
-            INSERT INTO ak_dg_tracing_date_1_param (ak_func_name, param_name, param_value, date, create_time, update_time, host_name)
+            INSERT INTO ak_dg_tracing_by_date_1_param (ak_func_name, param_name, param_value, last_td, create_time, update_time, host_name)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (ak_func_name, param_name, param_value, date) DO UPDATE 
-            SET update_time = EXCLUDED.update_time;
+            ON CONFLICT (ak_func_name, param_name, param_value) DO UPDATE 
+            SET last_td = EXCLUDED.last_td,
+                update_time = EXCLUDED.update_time,
+                host_name = EXCLUDED.host_name;
             """
         if LOGGER_DEBUG:
             logger.debug(f"Prepared insert SQL for tracing date with 1 param data: {_insert_sql}")
@@ -849,15 +913,20 @@ class UtilFuncs(object):
     def insert_tracing_scode_date_data(conn, ak_func_name, scode_list, date):
         _data = [(ak_func_name, _scode, date, datetime.now(), datetime.now(), os.getenv('HOSTNAME', socket.gethostname())) for _scode in scode_list]
         _insert_sql = """
-            INSERT INTO ak_dg_tracing_scode_date (ak_func_name, scode, date, create_time, update_time, host_name)
+            INSERT INTO ak_dg_tracing_by_scode_date (ak_func_name, scode, last_td, create_time, update_time, host_name)
             VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (ak_func_name, scode, date) DO UPDATE 
-            SET update_time = EXCLUDED.update_time;
+            ON CONFLICT (ak_func_name, scode) DO UPDATE 
+            SET last_td = EXCLUDED.last_td,
+                update_time = EXCLUDED.update_time,
+                host_name = EXCLUDED.host_name;
             """
         if LOGGER_DEBUG:
             logger.debug(f"Prepared insert SQL for tracing s_code date data: {_insert_sql}")
         UtilFuncs.execute_tracing_data_insert(conn, _insert_sql, _data)
     # endregion tracing data funcs
+
+			 
+															   
 
 # region test
 # df = UtilFuncs.get_data_by_td('stock_zt_pool_em', '20240402')

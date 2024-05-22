@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import pandas as pd
 from pathlib import Path
 from datetime import timedelta, datetime
 from dg_ak.utils.util_funcs import UtilFuncs as uf
@@ -9,7 +10,8 @@ import dg_ak.utils.config as con
 
 from airflow.exceptions import AirflowException
 from airflow.models.dag import DAG
-from airflow.operators.python import PythonOperator
+from airflow.operators.python import PythonOperator, BranchPythonOperator
+from airflow.operators.dummy import DummyOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.redis.hooks.redis import RedisHook
 from airflow.utils.dates import days_ago
@@ -34,16 +36,20 @@ STORED_KEYS_KEY_PREFIX = "stored_keys"
 def get_redis_key(base_key: str, identifier: str) -> str:
     return f"{base_key}@{identifier}"
 
-# region 板块
+
 
 def get_board_list(board_list_func_name: str):
     logger.info(f"Downloading board list for {board_list_func_name}")
     try:
         board_list_data_df = uf.get_data_today(board_list_func_name, ak_cols_config_dict)
+        if LOGGER_DEBUG:
+            logger.debug(f'length of board_list_data_df: {len(board_list_data_df)}')
+            logger.debug(f'head 5 of board_list_data_df:')
+            logger.debug(board_list_data_df.head(5))
         board_list_data_df = uf.convert_columns(board_list_data_df, f'ak_dg_{board_list_func_name}', pg_conn, redis_hook.get_conn())
         
-        if 'date' in board_list_data_df.columns:
-            board_list_data_df['date'] = pd.to_datetime(board_list_data_df['date'], errors='coerce').dt.strftime('%Y-%m-%d')
+        if 'td' in board_list_data_df.columns:
+            board_list_data_df['td'] = pd.to_datetime(board_list_data_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
         
         if board_list_data_df.empty:
             logger.warning(f"No data retrieved for {board_list_func_name}")
@@ -70,13 +76,13 @@ def store_board_list(board_list_func_name: str):
     insert_sql = f"""
         INSERT INTO ak_dg_{board_list_func_name}_store
         SELECT * FROM ak_dg_{board_list_func_name}
-        ON CONFLICT (date, b_code) DO NOTHING
-        RETURNING date;
+        ON CONFLICT (td, b_name) DO NOTHING
+        RETURNING td;
     """
 
     try:
         inserted_rows = uf.store_ak_data(pg_conn, board_list_func_name, insert_sql, truncate=True)
-        dates = list(set(row[0] for row in inserted_rows))
+        dates = list(set(row[0].strftime('%Y-%m-%d') for row in inserted_rows))  # 转换为字符串
         redis_key = get_redis_key(STORED_KEYS_KEY_PREFIX, board_list_func_name)
         uf.write_list_to_redis(redis_key, dates, redis_hook.get_conn(), uf.default_redis_ttl)
         logger.info(f"Data operation completed successfully for {board_list_func_name}. Dates: {dates}")
@@ -107,8 +113,8 @@ def get_board_cons(board_list_func_name: str, board_cons_func_name: str):
         board_cons_df = uf.get_data_by_board_names(board_cons_func_name, ak_cols_config_dict, board_list_df['b_name'])
         board_cons_df = uf.convert_columns(board_cons_df, f'ak_dg_{board_cons_func_name}', pg_conn, redis_hook.get_conn())
         
-        if 'date' in board_cons_df.columns:
-            board_cons_df['date'] = pd.to_datetime(board_cons_df['date'], errors='coerce').dt.strftime('%Y-%m-%d')
+        if 'td' in board_cons_df.columns:
+            board_cons_df['td'] = pd.to_datetime(board_cons_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
         
         temp_csv_path = uf.save_data_to_csv(board_cons_df, board_cons_func_name)
         if temp_csv_path is None:
@@ -127,13 +133,13 @@ def store_board_cons(board_cons_func_name: str):
     insert_sql = f"""
         INSERT INTO ak_dg_{board_cons_func_name}_store
         SELECT * FROM ak_dg_{board_cons_func_name}
-        ON CONFLICT (date, s_code, b_name) DO NOTHING
-        RETURNING date, b_name;
+        ON CONFLICT (td, s_code, b_name) DO NOTHING
+        RETURNING td, b_name;
     """
 
     try:
         inserted_rows = uf.store_ak_data(pg_conn, board_cons_func_name, insert_sql, truncate=True)
-        keys = list(set({(row[0], row[1]) for row in inserted_rows}))
+        keys = list(set({(row[0].strftime('%Y-%m-%d'), row[1]) for row in inserted_rows}))  # 转换为字符串
         redis_key = get_redis_key(STORED_KEYS_KEY_PREFIX, board_cons_func_name)
         uf.write_list_to_redis(redis_key, keys, redis_hook.get_conn(), uf.default_redis_ttl)
         logger.info(f"Data operation completed successfully for {board_cons_func_name}.")
@@ -151,6 +157,27 @@ def save_tracing_board_cons(board_cons_func_name: str, param_name: str):
     uf.insert_tracing_date_1_param_data(pg_conn, board_cons_func_name, param_name, cons_data)
     logger.info(f"Tracing data saved for {board_cons_func_name} with parameter data.")
 
+def generate_dag_name(board_list_func_name: str, board_cons_func_name: str) -> str:
+    type_mapping = {
+        'concept': '概念板块',
+        'industry': '行业板块'
+    }
+    source_mapping = {
+        'ths': '同花顺',
+        'em': '东方财富'
+    }
+    board_type = board_list_func_name.split('_')[2]  # 获取第三部分
+    source = board_list_func_name.split('_')[-1]  # 获取最后一部分
+    return f"板块-{source_mapping.get(source, source)}-{type_mapping.get(board_type, board_type)}"
+
+def is_trading_day(**kwargs) -> str:
+    today = datetime.now().strftime('%Y-%m-%d')
+    trade_dates = uf.get_trade_dates(pg_conn)
+    if today in trade_dates:
+        return 'continue_task'
+    else:
+        return 'skip_task'
+
 def generate_dag(board_list_func_name: str, board_cons_func_name: str):
     logger.info(f"Generating DAG for {board_list_func_name} and {board_cons_func_name}")
     default_args = {
@@ -164,56 +191,72 @@ def generate_dag(board_list_func_name: str, board_cons_func_name: str):
         'retry_delay': timedelta(minutes=con.DEFAULT_RETRY_DELAY),
     }
 
+    dag_name = generate_dag_name(board_list_func_name, board_cons_func_name)
+
     dag = DAG(
-        f'ak_dg_board_{board_list_func_name}_{board_cons_func_name}',
+        dag_name,
         default_args=default_args,
         description=f'利用akshare的函数{board_list_func_name}和{board_cons_func_name}下载板块相关数据',
-        schedule='0 15 * * *',  # 北京时间: 15+8=23
+        schedule=uf.generate_random_minute_schedule(hour=14),  # 北京时间: 14+8=22
         catchup=False,
         tags=['akshare', 'store_daily', '板块'],
         max_active_runs=1,
         params={},
     )
 
-    tasks = {
-        'get_board_list': PythonOperator(
+    with dag:
+        check_trading_day = BranchPythonOperator(
+            task_id='check_trading_day',
+            python_callable=is_trading_day,
+            provide_context=True,
+        )
+
+        continue_task = DummyOperator(task_id='continue_task')
+        skip_task = DummyOperator(task_id='skip_task')
+
+        get_board_list_task = PythonOperator(
             task_id=f'get_board_list-{board_list_func_name}',
             python_callable=get_board_list,
             op_kwargs={'board_list_func_name': board_list_func_name},
-            dag=dag,
-        ),
-        'store_board_list': PythonOperator(
+        )
+
+        store_board_list_task = PythonOperator(
             task_id=f'store_board_list-{board_list_func_name}',
             python_callable=store_board_list,
             op_kwargs={'board_list_func_name': board_list_func_name},
-            dag=dag,
-        ),
-        'save_tracing_board_list': PythonOperator(
+        )
+
+        save_tracing_board_list_task = PythonOperator(
             task_id=f'save_tracing_board_list-{board_list_func_name}',
             python_callable=save_tracing_board_list,
             op_kwargs={'board_list_func_name': board_list_func_name},
-            dag=dag,
-        ),
-        'get_board_cons': PythonOperator(
+        )
+
+        get_board_cons_task = PythonOperator(
             task_id=f'get_board_cons-{board_cons_func_name}',
             python_callable=get_board_cons,
             op_kwargs={'board_list_func_name': board_list_func_name, 'board_cons_func_name': board_cons_func_name},
-            dag=dag,
-        ),
-        'store_board_cons': PythonOperator(
+        )
+
+        store_board_cons_task = PythonOperator(
             task_id=f'store_board_cons-{board_cons_func_name}',
             python_callable=store_board_cons,
             op_kwargs={'board_cons_func_name': board_cons_func_name},
-            dag=dag,
-        ),
-        'save_tracing_board_cons': PythonOperator(
+        )
+
+        save_tracing_board_cons_task = PythonOperator(
             task_id=f'save_tracing_board_cons-{board_cons_func_name}',
             python_callable=save_tracing_board_cons,
             op_kwargs={'board_cons_func_name': board_cons_func_name, 'param_name': 'symbol'},
-            dag=dag,
+					
         )
-    }
-    tasks['get_board_list'] >> tasks['store_board_list'] >> tasks['save_tracing_board_list'] >> tasks['get_board_cons'] >> tasks['store_board_cons'] >> tasks['save_tracing_board_cons']
+
+        check_trading_day >> continue_task >> [
+            get_board_list_task, store_board_list_task, save_tracing_board_list_task,
+            get_board_cons_task, store_board_cons_task, save_tracing_board_cons_task
+        ]
+        check_trading_day >> skip_task
+
     return dag
 
 ak_func_name_list = [
@@ -230,4 +273,4 @@ for func_names in ak_func_name_list:
     dag_name = f'ak_dg_board_{board_type}_{source}'
     globals()[dag_name] = generate_dag(func_names[0], func_names[1])
     logger.info(f"DAG for {dag_name} successfully created and registered.")
-# endregion 板块
+
