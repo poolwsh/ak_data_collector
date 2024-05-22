@@ -7,6 +7,7 @@ from datetime import timedelta, datetime
 from dg_ak.utils.util_funcs import UtilFuncs as uf
 from dg_ak.utils.logger import logger
 import dg_ak.utils.config as con
+import random
 
 from airflow.exceptions import AirflowException
 from airflow.models.dag import DAG
@@ -31,16 +32,20 @@ ak_cols_config_dict = uf.load_ak_cols_config(config_path.as_posix())
 
 # 统一定义Redis keys
 BOARD_LIST_KEY_PREFIX = "board_list"
-STORED_KEYS_KEY_PREFIX = "stored_keys"
+STORED_KEYS_KEY_PREFIX = "stored_board_keys"
 
 def get_redis_key(base_key: str, identifier: str) -> str:
     return f"{base_key}@{identifier}"
 
-
-
 def get_board_list(board_list_func_name: str):
     logger.info(f"Downloading board list for {board_list_func_name}")
     try:
+        clear_table_sql = f"TRUNCATE TABLE ak_dg_{board_list_func_name};"
+        with pg_conn.cursor() as cursor:
+            cursor.execute(clear_table_sql)
+            pg_conn.commit()
+        logger.info(f"Table ak_dg_{board_list_func_name} has been cleared.")
+
         board_list_data_df = uf.get_data_today(board_list_func_name, ak_cols_config_dict)
         if LOGGER_DEBUG:
             logger.debug(f'length of board_list_data_df: {len(board_list_data_df)}')
@@ -104,6 +109,12 @@ def save_tracing_board_list(board_list_func_name: str):
 def get_board_cons(board_list_func_name: str, board_cons_func_name: str):
     logger.info(f"Starting to save data for {board_cons_func_name}")
     try:
+        clear_table_sql = f"TRUNCATE TABLE ak_dg_{board_cons_func_name};"
+        with pg_conn.cursor() as cursor:
+            cursor.execute(clear_table_sql)
+            pg_conn.commit()
+        logger.info(f"Table ak_dg_{board_cons_func_name} has been cleared.")
+
         redis_key = get_redis_key(BOARD_LIST_KEY_PREFIX, board_list_func_name)
         board_list_df = uf.get_df_from_redis(redis_key, redis_hook.get_conn())
         
@@ -171,8 +182,13 @@ def generate_dag_name(board_list_func_name: str, board_cons_func_name: str) -> s
     return f"板块-{source_mapping.get(source, source)}-{type_mapping.get(board_type, board_type)}"
 
 def is_trading_day(**kwargs) -> str:
-    today = datetime.now().strftime('%Y-%m-%d')
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    today = datetime.strptime(today_str, '%Y-%m-%d').date()
     trade_dates = uf.get_trade_dates(pg_conn)
+    trade_dates.sort(reverse=True)
+    if LOGGER_DEBUG:
+        logger.debug(f'today:{today}')
+        logger.debug(f'first 5 trade_dates: {trade_dates[:5]}')
     if today in trade_dates:
         return 'continue_task'
     else:
@@ -183,7 +199,7 @@ def generate_dag(board_list_func_name: str, board_cons_func_name: str):
     default_args = {
         'owner': con.DEFAULT_OWNER,
         'depends_on_past': False,
-        'start_date': days_ago(0),
+        'start_date': datetime(2024, 5, 22, 14, random.randint(0, 59)),  # 设置首次运行时间为2024年5月22日14点随机分钟
         'email': [con.DEFAULT_EMAIL],
         'email_on_failure': False,
         'email_on_retry': False,
@@ -197,7 +213,7 @@ def generate_dag(board_list_func_name: str, board_cons_func_name: str):
         dag_name,
         default_args=default_args,
         description=f'利用akshare的函数{board_list_func_name}和{board_cons_func_name}下载板块相关数据',
-        schedule=uf.generate_random_minute_schedule(hour=14),  # 北京时间: 14+8=22
+        schedule_interval='0 */8 * * *',  # 每8小时运行一次
         catchup=False,
         tags=['akshare', 'store_daily', '板块'],
         max_active_runs=1,
@@ -248,13 +264,13 @@ def generate_dag(board_list_func_name: str, board_cons_func_name: str):
             task_id=f'save_tracing_board_cons-{board_cons_func_name}',
             python_callable=save_tracing_board_cons,
             op_kwargs={'board_cons_func_name': board_cons_func_name, 'param_name': 'symbol'},
-					
+	 
         )
 
-        check_trading_day >> continue_task >> [
-            get_board_list_task, store_board_list_task, save_tracing_board_list_task,
-            get_board_cons_task, store_board_cons_task, save_tracing_board_cons_task
-        ]
+											   
+        check_trading_day >> continue_task >> get_board_list_task >> store_board_list_task >> save_tracing_board_list_task >> get_board_cons_task >> store_board_cons_task >> save_tracing_board_cons_task
+																					
+		 
         check_trading_day >> skip_task
 
     return dag
@@ -273,4 +289,3 @@ for func_names in ak_func_name_list:
     dag_name = f'ak_dg_board_{board_type}_{source}'
     globals()[dag_name] = generate_dag(func_names[0], func_names[1])
     logger.info(f"DAG for {dag_name} successfully created and registered.")
-
