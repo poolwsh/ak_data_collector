@@ -1,5 +1,8 @@
 # 使用akshare接口，读取涨跌停相关数据并保存到对应的表中： 
 ## stock_zt_pool_dtgc_em
+* 目标地址: https://quote.eastmoney.com/ztb/detail#type=zbgc
+* 描述: 东方财富网-行情中心-涨停板行情-跌停股池
+* 限量: 单次返回指定 date 的跌停股池数据；该接口只能获取近期的数据
 ```python
 import akshare
 from datetime import datetime, timedelta
@@ -23,6 +26,9 @@ akshare.stock_zt_pool_dtgc_em(date=yesterday_date).head(3)
 ```
 
 ## stock_zt_pool_em
+* 目标地址: https://quote.eastmoney.com/ztb/detail#type=ztgc
+* 描述: 东方财富网-行情中心-涨停板行情-涨停股池
+* 限量: 单次返回指定 date 的涨停股池数据; 该接口只能获取近期的数据
 ```python
 import akshare
 from datetime import datetime, timedelta
@@ -46,6 +52,9 @@ akshare.stock_zt_pool_em(date=yesterday_date).head(3)
 ```
 
 ## stock_zt_pool_previous_em
+* 目标地址: https://quote.eastmoney.com/ztb/detail#type=zrzt
+* 描述: 东方财富网-行情中心-涨停板行情-昨日涨停股池
+* 限量: 单次返回指定 date 的昨日涨停股池数据; 该接口只能获取近期的数据
 ```python
 import akshare
 from datetime import datetime, timedelta
@@ -69,6 +78,9 @@ akshare.stock_zt_pool_previous_em(date=yesterday_date).head(3)
 ```
 
 ## stock_zt_pool_strong_em
+* 目标地址: https://quote.eastmoney.com/ztb/detail#type=qsgc
+* 描述: 东方财富网-行情中心-涨停板行情-强势股池
+* 限量: 单次返回指定 date 的强势股池数据；该接口只能获取近期的数据
 ```python
 import akshare
 from datetime import datetime, timedelta
@@ -94,6 +106,9 @@ akshare.stock_zt_pool_strong_em(date=yesterday_date).head(3)
 
 
 ## stock_zt_pool_sub_new_em
+* 目标地址: https://quote.eastmoney.com/ztb/detail#type=cxgc
+* 描述: 东方财富网-行情中心-涨停板行情-次新股池
+* 限量: 单次返回指定 date 的次新股池数据；该接口只能获取近期的数据
 ```python
 import akshare
 from datetime import datetime, timedelta
@@ -119,6 +134,9 @@ akshare.stock_zt_pool_sub_new_em(date=yesterday_date).head(3)
 
 
 ## stock_zt_pool_zbgc_em
+* 目标地址: https://quote.eastmoney.com/ztb/detail#type=zbgc
+* 描述: 东方财富网-行情中心-涨停板行情-炸板股池
+* 限量: 单次返回指定 date 的炸板股池数据；该接口只能获取近期的数据
 ```python
 import akshare
 from datetime import datetime, timedelta

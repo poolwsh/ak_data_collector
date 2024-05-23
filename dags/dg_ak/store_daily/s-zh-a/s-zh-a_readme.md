@@ -1,5 +1,8 @@
 # 使用akshare接口，读取大陆A股个股行情相关数据并保存到对应的表中： 
 ## stock_zh_a_hist
+* 目标地址: https://quote.eastmoney.com/concept/sh603777.html?from=classic(示例)
+* 描述: 东方财富-沪深京 A 股日频率数据; 历史数据按日频率更新, 当日收盘价请在收盘后获取
+* 限量: 单次返回指定沪深京 A 股上市公司、指定周期和指定日期间的历史行情日频率数据
 ```python
 import akshare
 from datetime import datetime, timedelta

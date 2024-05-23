@@ -1,5 +1,8 @@
 # 使用akshare接口，读取板块相关数据并保存到对应的表中： 
 ## stock_board_concept_name_ths
+* 目标地址: https://q.10jqka.com.cn/gn/detail/code/30155&8/
+* 描述: 同花顺-板块-概念板块-概念
+* 限量: 单次返回当前所有概念时间表；日期为空的为补充概念
 ```python
 import akshare as ak
 ak.stock_zh_a_spot_em().head(3)
@@ -12,6 +15,9 @@ ak.stock_zh_a_spot_em().head(3)
 ```
 
 ## stock_board_concept_name_em
+* 目标地址: https://quote.eastmoney.com/center/boardlist.html#concept_board
+* 描述: 东方财富网-行情中心-沪深京板块-概念板块
+* 限量: 单次返回当前时刻所有概念板块数据
 ```python
 import akshare as ak
 ak.stock_board_concept_name_em().head(3)
@@ -24,6 +30,9 @@ ak.stock_board_concept_name_em().head(3)
 ```
 
 ## stock_board_industry_summary_ths
+* 目标地址: https://q.10jqka.com.cn/thshy/
+* 描述: 同花顺-同花顺行业一览表
+* 限量: 单次返回当前时刻同花顺行业一览表
 ```python
 import akshare as ak
 ak.stock_board_industry_summary_ths().head(3)
@@ -36,6 +45,9 @@ ak.stock_board_industry_summary_ths().head(3)
 ```
 
 ## stock_board_industry_name_em
+* 目标地址: https://quote.eastmoney.com/center/boardlist.html#industry_board
+* 描述: 东方财富-沪深京板块-行业板块
+* 限量: 单次返回当前时刻所有行业板块数据
 ```python
 import akshare as ak
 ak.stock_board_industry_name_em().head(3)
@@ -48,6 +60,9 @@ ak.stock_board_industry_name_em().head(3)
 ```
 
 ## stock_board_concept_cons_ths
+* 目标地址: https://q.10jqka.com.cn/gn/detail/code/301558/
+* 描述: 同花顺-板块-概念板块-成份股数据
+* 限量: 单次返回当前时刻所有成份股, 调用 ak.stock_board_concept_info_ths() 返回该板块信息
 ```python
 import akshare as ak
 ak.stock_board_concept_cons_ths(symbol="AI手机").head(3)
@@ -60,6 +75,9 @@ ak.stock_board_concept_cons_ths(symbol="AI手机").head(3)
 ```
 
 ## stock_board_concept_cons_em
+* 目标地址: http://quote.eastmoney.com/center/boardlist.html#boards-BK06551(示例)
+* 描述: 东方财富-沪深板块-概念板块-板块成份
+* 限量: 单次返回当前时刻所有成份股
 ```python
 import akshare as ak
 ak.stock_board_concept_cons_em(symbol="车联网").head(3)
@@ -72,6 +90,9 @@ ak.stock_board_concept_cons_em(symbol="车联网").head(3)
 ```
 
 ## stock_board_industry_cons_ths
+* 目标地址: https://q.10jqka.com.cn/thshy/
+* 描述: 同花顺-板块-行业板块-成份股数据
+* 限量: 单次返回当前时刻所有成份股, 调用 ak.stock_board_industry_info_ths() 返回该板块信息
 ```python
 import akshare as ak
 ak.stock_board_industry_cons_ths(symbol="车联网").head(3)
@@ -84,6 +105,9 @@ ak.stock_board_industry_cons_ths(symbol="车联网").head(3)
 ```
 
 ## stock_board_industry_cons_em
+* 目标地址: https://data.eastmoney.com/bkzj/BK1027.html
+* 描述: 东方财富-沪深板块-行业板块-板块成份
+* 限量: 单次返回指定 symbol 的所有成份股
 ```python
 import akshare as ak
 ak.stock_board_industry_cons_em(symbol="小金属").head(3)
