@@ -34,7 +34,7 @@ ak_cols_config = {
                      '今日中单净流入-净额', '今日中单净流入-净占比', '今日小单净流入-净额', '今日小单净流入-净占比', 
                      '今日主力净流入最大股'],
         "remove_list": ['序号'],
-        "en_list": ['s_name', 'today_pct_chg', 'today_main_net_inflow', 'today_main_net_inflow_pct',
+        "en_list": ['b_name', 'today_pct_chg', 'today_main_net_inflow', 'today_main_net_inflow_pct',
                     'today_huge_order_net_inflow', 'today_huge_order_net_inflow_pct', 'today_large_order_net_inflow', 'today_large_order_net_inflow_pct', 
                     'today_medium_order_net_inflow', 'today_medium_order_net_inflow_pct', 'today_small_order_net_inflow', 'today_small_order_net_inflow_pct', 
                     'today_main_net_inflow_max_stock']

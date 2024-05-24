@@ -1,5 +1,5 @@
-DROP TABLE IF EXISTS ak_dg_stock_individual_fund_flow;
-CREATE TABLE ak_dg_stock_individual_fund_flow (
+DROP TABLE IF EXISTS ak_dg_stock_individual_fund_flow_store;
+CREATE TABLE ak_dg_stock_individual_fund_flow_store (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
     c DECIMAL,
@@ -17,8 +17,8 @@ CREATE TABLE ak_dg_stock_individual_fund_flow (
     PRIMARY KEY (td, s_code)
 );
 
-DROP TABLE IF EXISTS ak_dg_stock_individual_fund_flow_rank;
-CREATE TABLE ak_dg_stock_individual_fund_flow_rank (
+DROP TABLE IF EXISTS ak_dg_stock_individual_fund_flow_rank_store;
+CREATE TABLE ak_dg_stock_individual_fund_flow_rank_store (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
     s_name VARCHAR(255),
@@ -37,8 +37,8 @@ CREATE TABLE ak_dg_stock_individual_fund_flow_rank (
     PRIMARY KEY (td, s_code)
 );
 
-DROP TABLE IF EXISTS ak_dg_stock_market_fund_flow;
-CREATE TABLE ak_dg_stock_market_fund_flow (
+DROP TABLE IF EXISTS ak_dg_stock_market_fund_flow_store;
+CREATE TABLE ak_dg_stock_market_fund_flow_store (
     td DATE NOT NULL,
     shanghai_closing_price DECIMAL,
     shanghai_pct_chg DECIMAL,
@@ -57,10 +57,10 @@ CREATE TABLE ak_dg_stock_market_fund_flow (
     PRIMARY KEY (td)
 );
 
-DROP TABLE IF EXISTS ak_dg_stock_sector_fund_flow_rank;
-CREATE TABLE ak_dg_stock_sector_fund_flow_rank (
+DROP TABLE IF EXISTS ak_dg_stock_sector_fund_flow_rank_store;
+CREATE TABLE ak_dg_stock_sector_fund_flow_rank_store (
     td DATE NOT NULL,
-    s_name VARCHAR(255) NOT NULL,
+    b_name VARCHAR(255) NOT NULL,
     sector_type VARCHAR(255),
     today_pct_chg DECIMAL,
     today_main_net_inflow DECIMAL,
@@ -74,11 +74,11 @@ CREATE TABLE ak_dg_stock_sector_fund_flow_rank (
     today_small_order_net_inflow DECIMAL,
     today_small_order_net_inflow_pct DECIMAL,
     today_main_net_inflow_max_stock VARCHAR(255),
-    PRIMARY KEY (td, s_name)
+    PRIMARY KEY (td, b_name)
 );
 
-DROP TABLE IF EXISTS ak_dg_stock_main_fund_flow;
-CREATE TABLE ak_dg_stock_main_fund_flow (
+DROP TABLE IF EXISTS ak_dg_stock_main_fund_flow_store;
+CREATE TABLE ak_dg_stock_main_fund_flow_store (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
     s_name VARCHAR(255),
@@ -96,8 +96,8 @@ CREATE TABLE ak_dg_stock_main_fund_flow (
     PRIMARY KEY (td, s_code)
 );
 
-DROP TABLE IF EXISTS ak_dg_stock_sector_fund_flow_summary;
-CREATE TABLE ak_dg_stock_sector_fund_flow_summary (
+DROP TABLE IF EXISTS ak_dg_stock_sector_fund_flow_summary_store;
+CREATE TABLE ak_dg_stock_sector_fund_flow_summary_store (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
     s_name VARCHAR(255),
@@ -117,8 +117,8 @@ CREATE TABLE ak_dg_stock_sector_fund_flow_summary (
     PRIMARY KEY (td, s_code)
 );
 
-DROP TABLE IF EXISTS ak_dg_stock_sector_fund_flow_hist;
-CREATE TABLE ak_dg_stock_sector_fund_flow_hist (
+DROP TABLE IF EXISTS ak_dg_stock_sector_fund_flow_hist_store;
+CREATE TABLE ak_dg_stock_sector_fund_flow_hist_store (
     td DATE NOT NULL,
     b_name VARCHAR(255) NOT NULL,
     main_net_inflow DECIMAL,
@@ -134,8 +134,8 @@ CREATE TABLE ak_dg_stock_sector_fund_flow_hist (
     PRIMARY KEY (td, b_name)
 );
 
-DROP TABLE IF EXISTS ak_dg_stock_concept_fund_flow_hist;
-CREATE TABLE ak_dg_stock_concept_fund_flow_hist (
+DROP TABLE IF EXISTS ak_dg_stock_concept_fund_flow_hist_store;
+CREATE TABLE ak_dg_stock_concept_fund_flow_hist_store (
     td DATE NOT NULL,
     b_name VARCHAR(255) NOT NULL,
     main_net_inflow DECIMAL,

@@ -741,6 +741,9 @@ class UtilFuncs(UtilTools):
         column_names = [col[0] for col in _columns]
         column_types = {col[0]: col[1] for col in _columns}
 
+        if con.LOGGER_DEBUG:
+            logger.debug('column_names')
+            logger.debug(column_names)
         # 根据列名对 DataFrame 进行筛选
         df = df[column_names]
 
