@@ -258,12 +258,11 @@ def generate_dag(stock_func, period, adjust):
     default_args = {
         'owner': con.DEFAULT_OWNER,
         'depends_on_past': False,
-        'start_date': days_ago(0),
         'email': [con.DEFAULT_EMAIL],
         'email_on_failure': False,
         'email_on_retry': False,
         'retries': 1,
-        'retry_delay': timedelta(minutes=con.DEFAULT_RETRY_DELAY),
+        'retry_delay': timedelta(minutes=con.DEFAULT_RETRY_DELAY)
     }
 
     dag_name = generate_dag_name(stock_func, period, adjust)
@@ -272,6 +271,7 @@ def generate_dag(stock_func, period, adjust):
         dag_name,
         default_args=default_args,
         description=f'利用akshare的函数{stock_func}(period={period}, adjust={adjust})下载个股行情相关数据',
+        start_date=days_ago(1),
         schedule=uf.generate_random_minute_schedule(hour=8), # 北京时间: 8+8=16
         catchup=False,
         tags=['akshare', 'store_daily', '个股行情'],

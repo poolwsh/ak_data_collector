@@ -203,13 +203,11 @@ def generate_dag(ak_func_name: str):
     default_args = {
         'owner': 'wsh',
         'depends_on_past': False,
-        'start_date': days_ago(1),
         'email': ['wshmxgz@gmail.com'],
         'email_on_failure': False,
         'email_on_retry': False,
         'retries': 1,
-        'retry_delay': timedelta(minutes=5),
-
+        'retry_delay': timedelta(minutes=con.DEFAULT_RETRY_DELAY)
     }
 
     dag_name = generate_dag_name(ak_func_name)
@@ -218,6 +216,8 @@ def generate_dag(ak_func_name: str):
         dag_name,
         default_args=default_args,
         description=f'利用akshare的函数{ak_func_name}下载涨跌停相关数据',
+        start_date=days_ago(1),
+        
         schedule=uf.generate_random_minute_schedule(hour=9), # 北京时间: 9+8=17
         catchup=False,
         tags=['akshare', 'store_daily', '涨跌停'],

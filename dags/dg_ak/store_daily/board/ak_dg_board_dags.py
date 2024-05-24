@@ -199,12 +199,11 @@ def generate_dag(board_list_func_name: str, board_cons_func_name: str):
     default_args = {
         'owner': con.DEFAULT_OWNER,
         'depends_on_past': False,
-        'start_date': datetime(2024, 5, 22, 14, random.randint(0, 59)),  # 设置首次运行时间为2024年5月22日14点随机分钟
         'email': [con.DEFAULT_EMAIL],
         'email_on_failure': False,
         'email_on_retry': False,
         'retries': 1,
-        'retry_delay': timedelta(minutes=con.DEFAULT_RETRY_DELAY),
+        'retry_delay': timedelta(minutes=con.DEFAULT_RETRY_DELAY)
     }
 
     dag_name = generate_dag_name(board_list_func_name, board_cons_func_name)
@@ -212,8 +211,9 @@ def generate_dag(board_list_func_name: str, board_cons_func_name: str):
     dag = DAG(
         dag_name,
         default_args=default_args,
+        start_date=datetime(2024, 5, 22, 14, random.randint(0, 59)),  # 设置首次运行时间为2024年5月22日14点随机分钟
         description=f'利用akshare的函数{board_list_func_name}和{board_cons_func_name}下载板块相关数据',
-        schedule_interval='0 */8 * * *',  # 每8小时运行一次
+        schedule_interval='0 */3 * * *',  # 每3小时运行一次
         catchup=False,
         tags=['akshare', 'store_daily', '板块'],
         max_active_runs=1,

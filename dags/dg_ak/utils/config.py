@@ -5,7 +5,7 @@ REDIS_CONN_ID = "local_redis_3"
 
 DEFAULT_EMAIL = "wshmxgz@gmail.com"
 DEFAULT_OWNER = "wsh"
-DEFAULT_RETRY_DELAY = 5  # in minutes
+DEFAULT_RETRY_DELAY = 30  # in minutes
 
 STOCK_A_REALTIME_KEY= "stock_a_realtime"
 
