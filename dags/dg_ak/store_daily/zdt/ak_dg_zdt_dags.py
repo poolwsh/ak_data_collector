@@ -56,7 +56,7 @@ def get_tracing_data(ak_func_name: str):
             if LOGGER_DEBUG:
                 logger.debug(f"Last trading date for {ak_func_name}: {last_td}")
             start_index = td_list.index(last_td) if last_td in td_list else 0
-            selected_dates = td_list[start_index:start_index + rollback_days + 1]
+            selected_dates = td_list[:start_index + rollback_days + 1]
         else:
             selected_dates = td_list[:default_trade_dates]
         

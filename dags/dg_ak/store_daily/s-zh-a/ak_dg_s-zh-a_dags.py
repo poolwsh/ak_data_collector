@@ -43,7 +43,7 @@ STOCK_CODE_NAME_TABLE = 'ak_dg_stock_zh_a_code_name'
 default_end_date = uf.format_td8(datetime.now()) # - timedelta(days=1)
 default_start_date = con.zh_a_default_start_date
 batch_size = 50  # 根据需求调整批次大小
-rollback_days = 15  # 回滚天数
+rollback_days = 30  # 回滚天数
 
 def insert_code_name_to_db(code_name_list: list[tuple[str, str]]):
     try:
@@ -118,7 +118,7 @@ def get_stock_data(ak_func_name: str, period: str, adjust: str):
                 )
             else:
                 _stock_data_df = uf.get_s_code_data(
-                    ak_func_name, ak_cols_config_dict, _s_code, period, _start_date, _end_date, None
+                    ak_func_name, ak_cols_config_dict, _s_code, period, _start_date, _end_date, adjust
                 )
 
             if not _stock_data_df.empty:
