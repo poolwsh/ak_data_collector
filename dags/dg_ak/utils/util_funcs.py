@@ -1,6 +1,14 @@
-import csv
-import sys
+
 import os
+import sys
+from pathlib import Path
+current_path = Path(__file__).resolve().parent 
+project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..'))
+print(project_root)
+# 将项目根目录添加到sys.path中
+sys.path.append(project_root)
+
+import csv
 import json
 import time
 import redis
@@ -12,9 +20,9 @@ from io import BytesIO
 from datetime import date, datetime, timedelta
 from typing import Optional, Union
 
-import dg_ak.utils.config as con
-from dg_ak.utils.utils import UtilTools
-from dg_ak.utils.logger import logger
+import utils.config as con
+from utils.utils import UtilTools
+from utils.logger import logger
 
 from airflow.exceptions import AirflowException
 

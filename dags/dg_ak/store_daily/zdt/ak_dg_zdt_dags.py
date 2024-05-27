@@ -2,13 +2,20 @@ from __future__ import annotations
 
 import os
 import sys
-import socket
 from pathlib import Path
-from datetime import datetime, timedelta
+current_path = Path(__file__).resolve().parent 
+project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..'))
+print(project_root)
+# 将项目根目录添加到sys.path中
+sys.path.append(project_root)
+
+
+import socket
 import pandas as pd
+from datetime import datetime, timedelta
 from dg_ak.utils.util_funcs import UtilFuncs as uf
-from dg_ak.utils.logger import logger
-import dg_ak.utils.config as con
+from utils.logger import logger
+import utils.config as con
 
 from airflow.exceptions import AirflowException
 from airflow.models.dag import DAG
@@ -25,7 +32,7 @@ redis_hook = RedisHook(redis_conn_id=con.REDIS_CONN_ID)
 pgsql_hook = PostgresHook(postgres_conn_id=con.TXY800_PGSQL_CONN_ID)
 pg_conn = pgsql_hook.get_conn()
 
-config_path = Path(__file__).resolve().parent / 'ak_dg_zdt_config.py'
+config_path = current_path / 'ak_dg_zdt_config.py'
 sys.path.append(config_path.parent.as_posix())
 ak_cols_config_dict = uf.load_ak_cols_config(config_path.as_posix())
 

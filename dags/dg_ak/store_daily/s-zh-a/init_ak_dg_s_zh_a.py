@@ -15,10 +15,9 @@ current_dir = Path(__file__).resolve().parent
 project_root = current_dir.parent.parent.parent.parent
 sys.path.append(str(project_root))
 
-from dg_ak.utils.utils import UtilTools as ut
-from dg_ak.utils.util_funcs import UtilFuncs as uf
-from dg_ak.utils.logger import logger
-import dg_ak.utils.config as con
+from dags.dg_ak.utils.util_funcs import UtilFuncs as uf
+from dags.utils.logger import logger
+import dags.utils.config as con
 
 # 配置日志调试开关
 LOGGER_DEBUG = con.LOGGER_DEBUG

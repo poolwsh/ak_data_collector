@@ -1,10 +1,18 @@
 
 from __future__ import annotations
 
-import sys
 import os
-import socket
+import sys
 from pathlib import Path
+current_path = Path(__file__).resolve().parent 
+project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..'))
+print(project_root)
+# 将项目根目录添加到sys.path中
+sys.path.append(project_root)
+
+
+import socket
+import pandas as pd
 from datetime import timedelta, datetime
 from airflow.models.dag import DAG
 from airflow.exceptions import AirflowException
@@ -14,9 +22,8 @@ from airflow.providers.redis.hooks.redis import RedisHook
 from airflow.utils.dates import days_ago
 
 from dg_ak.utils.util_funcs import UtilFuncs as uf
-from dg_ak.utils.logger import logger
-import pandas as pd
-import dg_ak.utils.config as con
+from utils.logger import logger
+import utils.config as con
 
 # 配置日志调试开关
 LOGGER_DEBUG = con.LOGGER_DEBUG
@@ -27,7 +34,7 @@ pgsql_hook = PostgresHook(postgres_conn_id=con.TXY800_PGSQL_CONN_ID)
 pg_conn = pgsql_hook.get_conn()
 
 # 配置路径
-config_path = Path(__file__).resolve().parent / 'ak_dg_s-zh-a_config.py'
+config_path = current_path / 'ak_dg_s-zh-a_config.py'
 sys.path.append(config_path.parent.as_posix())
 ak_cols_config_dict = uf.load_ak_cols_config(config_path.as_posix())
 
@@ -43,7 +50,7 @@ STOCK_CODE_NAME_TABLE = 'ak_dg_stock_zh_a_code_name'
 default_end_date = uf.format_td8(datetime.now()) # - timedelta(days=1)
 default_start_date = con.zh_a_default_start_date
 batch_size = 50  # 根据需求调整批次大小
-rollback_days = 30  # 回滚天数
+rollback_days = 15  # 回滚天数
 
 def insert_code_name_to_db(code_name_list: list[tuple[str, str]]):
     try:
