@@ -21,7 +21,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional, Union
 
 import utils.config as con
-from utils.utils import UtilTools
+from utils.ak_utils import AkUtilTools
 from utils.logger import logger
 
 from airflow.exceptions import AirflowException
@@ -32,71 +32,11 @@ LOGGER_DEBUG = con.LOGGER_DEBUG
 class DateOutOfRangeException(Exception):
     pass
 
-class UtilFuncs(UtilTools):
-    default_redis_ttl = 60 * 60  # 1 hour
+class DgAkUtilFuncs(AkUtilTools):
+
     default_pause_time = 0.2  # 200ms
 
     # region stock funcs
-    @staticmethod
-    def get_s_code_list(redis_conn: redis.Redis, ttl: int = default_redis_ttl):
-        if LOGGER_DEBUG:
-            logger.debug("Attempting to get stock codes list from Redis.")
-        try:
-            _df = UtilFuncs.read_df_from_redis(con.STOCK_A_REALTIME_KEY, redis_conn)
-            logger.info('Read stock real-time data from Redis successfully.')
-            if LOGGER_DEBUG:
-                logger.debug(f"Stock codes list length: {len(_df['s_code'])}, first 5 codes: {_df['s_code'].tolist()[:5]}")
-            return _df['s_code']
-        except Exception as _e:
-            logger.warning(f"Failed to read stock real-time data from Redis: {_e}")
-            try:
-                _df = getattr(ak, 'stock_zh_a_spot_em')()
-                if _df is not None and '代码' in _df.columns:
-                    _df.rename(columns={'代码': 's_code'}, inplace=True)
-                    _df['s_code'] = _df['s_code'].astype(str)
-                    UtilFuncs.write_df_to_redis(con.STOCK_A_REALTIME_KEY, _df, redis_conn, ttl)
-                    if LOGGER_DEBUG:
-                        logger.debug(f"Fetched and cached stock codes list length: {len(_df['s_code'])}, first 5 codes: {_df['s_code'].tolist()[:5]}")
-                    return _df['s_code']
-                else:
-                    logger.error("Failed to fetch or process data from the source.")
-                    return pd.Series()  # 返回一个空的序列以避免进一步错误
-            except Exception as _inner_e:
-                logger.error(f"Error while fetching or writing data: {_inner_e}")
-                raise  # 可能需要重新抛出异常或处理错误
-
-    @staticmethod
-    def get_s_code_name_list(redis_conn: redis.Redis, ttl: int = 60 * 60):
-        if LOGGER_DEBUG:
-            logger.debug("Attempting to get stock codes and names list from Redis.")
-        try:
-            _df = UtilFuncs.read_df_from_redis(con.STOCK_A_REALTIME_KEY, redis_conn)
-            if _df is not None:
-                logger.info('Read stock real-time data from Redis successfully.')
-                if LOGGER_DEBUG:
-                    logger.debug(f"Stock codes and names list length: {len(_df)}, first 5: {_df[['s_code', 's_name']].values.tolist()[:5]}")
-                return _df[['s_code', 's_name']].values.tolist()
-            else:
-                logger.warning(f"No data found in Redis for key: {con.STOCK_A_REALTIME_KEY}")
-        except Exception as _e:
-            logger.warning(f"Failed to read stock real-time data from Redis: {_e}")
-
-        # Fetch data from AkShare if Redis data is not available
-        try:
-            _df = getattr(ak, 'stock_zh_a_spot_em')()
-            if _df is not None and '代码' in _df.columns and '名称' in _df.columns:
-                _df.rename(columns={'代码': 's_code', '名称': 's_name'}, inplace=True)
-                _df['s_code'] = _df['s_code'].astype(str)
-                UtilFuncs.write_df_to_redis(con.STOCK_A_REALTIME_KEY, _df, redis_conn, ttl)
-                if LOGGER_DEBUG:
-                    logger.debug(f"Fetched and cached stock codes and names list length: {len(_df)}, first 5: {_df[['s_code', 's_name']].values.tolist()[:5]}")
-                return _df[['s_code', 's_name']].values.tolist()
-            else:
-                logger.error("Failed to fetch or process data from the source.")
-                return []
-        except Exception as _inner_e:
-            logger.error(f"Error while fetching or writing data: {_inner_e}")
-            raise  # 重新抛出异常或处理错误
 
     @staticmethod
     def get_s_code_data(ak_func_name, ak_cols_config_dict, s_code, period, start_date, end_date, adjust, pause_time: float = default_pause_time):
@@ -108,13 +48,13 @@ class UtilFuncs(UtilTools):
             logger.error(_error_msg)
             raise AirflowException(_error_msg)
         if adjust is None:
-            _s_df = UtilFuncs.try_to_call(
+            _s_df = DgAkUtilFuncs.try_to_call(
                 _ak_func,
                 {'symbol': s_code, 'period': period,
                  'start_date': start_date, 'end_date': end_date
                  }, pause_time=pause_time)
         else:
-            _s_df = UtilFuncs.try_to_call(
+            _s_df = DgAkUtilFuncs.try_to_call(
                 _ak_func,
                 {'symbol': s_code, 'period': period,
                  'start_date': start_date, 'end_date': end_date, 'adjust': adjust
@@ -130,8 +70,8 @@ class UtilFuncs(UtilTools):
 
         if LOGGER_DEBUG:
             logger.debug(f"Removing unnecessary columns for ak_func_name: {ak_func_name}")
-        _s_df = UtilTools.remove_cols(_s_df, ak_cols_config_dict[ak_func_name])
-        _s_df.rename(columns=UtilTools.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
+        _s_df = DgAkUtilFuncs.remove_cols(_s_df, ak_cols_config_dict[ak_func_name])
+        _s_df.rename(columns=DgAkUtilFuncs.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
         _s_df['s_code'] = s_code
         if LOGGER_DEBUG:
             logger.debug(f'Processed s_code data for {s_code}, length: {len(_s_df)}, first 5 rows: {_s_df.head().to_dict(orient="records")}')
@@ -141,8 +81,8 @@ class UtilFuncs(UtilTools):
     def merge_s_code_data(ak_func_name, config_dict, s_code, period, start_date, end_date, adjust, pause_time: float = default_pause_time):
         if LOGGER_DEBUG:
             logger.debug(f"Merging data for s_code: {s_code}")
-        _s_df = UtilFuncs.get_s_code_data(ak_func_name, config_dict, s_code, period, start_date, end_date, adjust, pause_time=pause_time)
-        _hfq_s_df = UtilFuncs.get_s_code_data(ak_func_name, config_dict, s_code, period, start_date, end_date, adjust, pause_time=pause_time)
+        _s_df = DgAkUtilFuncs.get_s_code_data(ak_func_name, config_dict, s_code, period, start_date, end_date, adjust, pause_time=pause_time)
+        _hfq_s_df = DgAkUtilFuncs.get_s_code_data(ak_func_name, config_dict, s_code, period, start_date, end_date, adjust, pause_time=pause_time)
         _s_df.set_index('td', inplace=True)
         _hfq_s_df.set_index('td', inplace=True)
         _hfq_s_df = _hfq_s_df.add_suffix('_hfq')
@@ -159,7 +99,7 @@ class UtilFuncs(UtilTools):
         _df_result = pd.DataFrame()
         for _index, _s_code in enumerate(s_code_list, start=1):
             logger.info(f'({_index}/{_len_s_code_list}) downloading data with s_code={_s_code}')
-            _merge_s_code_df = UtilFuncs.merge_s_code_data(ak_func_name, config_dict, _s_code, period, start_date, end_date, adjust, pause_time=pause_time)
+            _merge_s_code_df = DgAkUtilFuncs.merge_s_code_data(ak_func_name, config_dict, _s_code, period, start_date, end_date, adjust, pause_time=pause_time)
             _df_result = pd.concat([_df_result, _merge_s_code_df], axis=0)
         if LOGGER_DEBUG:
             logger.debug(f"Total merged data shape: {_df_result.shape}, first 5 rows: {_df_result.head().to_dict(orient='records')}")
@@ -208,19 +148,19 @@ class UtilFuncs(UtilTools):
         if LOGGER_DEBUG:
             logger.debug(f"Fetching data for redis_key: {redis_key}, ak_func_name: {ak_func_name}")
         _table_name = f"ak_dg_{ak_func_name}"
-        _date_df = UtilFuncs.read_df_from_redis(redis_key, redis_conn)
+        _date_df = DgAkUtilFuncs.read_df_from_redis(redis_key, redis_conn)
 
-        _date_list = [UtilTools.format_td8(_date) for _date in _date_df['td'].sort_values(ascending=False).tolist()]
+        _date_list = [DgAkUtilFuncs.format_td8(_date) for _date in _date_df['td'].sort_values(ascending=False).tolist()]
         if LOGGER_DEBUG:
             logger.debug(f"date_list length: {len(_date_list)}, first 5 dates: {_date_list[:5]}")
         
         # Check if dates are within the valid range
-        _date_list = [date for date in _date_list if UtilFuncs.is_valid_date(date, ak_func_name)]
+        _date_list = [date for date in _date_list if DgAkUtilFuncs.is_valid_date(date, ak_func_name)]
 
-        _ak_data_df = UtilFuncs.get_data_by_td_list(ak_func_name, ak_cols_config_dict, _date_list)
+        _ak_data_df = DgAkUtilFuncs.get_data_by_td_list(ak_func_name, ak_cols_config_dict, _date_list)
         
         # Flatten the tuple list into column names
-        _desired_columns = [col[0] for col in UtilFuncs.get_columns_from_table(pg_conn, _table_name, redis_conn)]
+        _desired_columns = [col[0] for col in DgAkUtilFuncs.get_columns_from_table(pg_conn, _table_name, redis_conn)]
         
         try:
             _ak_data_df = _ak_data_df[_desired_columns]
@@ -256,8 +196,8 @@ class UtilFuncs(UtilTools):
 
     @staticmethod
     def generate_dt_list(begin_dt, end_dt, dt_format='%Y-%m-%d', ascending=False):
-        _start = datetime.strptime(UtilTools.format_td10(begin_dt), '%Y-%m-%d')
-        _end = datetime.strptime(UtilTools.format_td10(end_dt), '%Y-%m-%d')
+        _start = datetime.strptime(DgAkUtilFuncs.format_td10(begin_dt), '%Y-%m-%d')
+        _end = datetime.strptime(DgAkUtilFuncs.format_td10(end_dt), '%Y-%m-%d')
         _date_list = []
         if ascending:
             while _start <= _end:
@@ -326,7 +266,7 @@ class UtilFuncs(UtilTools):
             raise AirflowException(_error_msg)
 
         try:
-            _df = UtilFuncs.try_to_call(_ak_func)
+            _df = DgAkUtilFuncs.try_to_call(_ak_func)
             if _df is None or _df.empty:
                 if _df is None:
                     _error_msg = f'Data function {ak_func_name} returned None for today ({_today_date}).'
@@ -336,8 +276,8 @@ class UtilFuncs(UtilTools):
                     logger.warning(_warning_msg)
                 return pd.DataFrame()  # Return empty DataFrame to avoid further errors
 
-            _df = UtilTools.remove_cols(_df, ak_cols_config_dict[ak_func_name])
-            _df.rename(columns=UtilTools.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
+            _df = DgAkUtilFuncs.remove_cols(_df, ak_cols_config_dict[ak_func_name])
+            _df.rename(columns=DgAkUtilFuncs.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
             _df['td'] = _today_date  # Add a new column 'date' with today's date
             if LOGGER_DEBUG:
                 logger.debug(f"Retrieved data for today length: {len(_df)}, first 5 rows: {_df.head().to_dict(orient='records')}")
@@ -356,7 +296,7 @@ class UtilFuncs(UtilTools):
             logger.error(_error_msg)
             raise AirflowException(_error_msg)
 
-        _df = UtilFuncs.try_to_call(_ak_func, {td_pa_name: td})
+        _df = DgAkUtilFuncs.try_to_call(_ak_func, {td_pa_name: td})
         if _df is None or _df.empty:
             if _df is None:
                 _error_msg = f'Data function {ak_func_name} returned None for date {td}.'
@@ -366,9 +306,9 @@ class UtilFuncs(UtilTools):
                 logger.warning(_warning_msg)
             return pd.DataFrame()  # 返回空的 DataFrame，以避免进一步的处理出错
 
-        _df = UtilTools.remove_cols(_df, ak_cols_config_dict[ak_func_name])
-        _df.rename(columns=UtilTools.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
-        _df = UtilTools.add_td(_df, td)
+        _df = DgAkUtilFuncs.remove_cols(_df, ak_cols_config_dict[ak_func_name])
+        _df.rename(columns=DgAkUtilFuncs.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
+        _df = DgAkUtilFuncs.add_td(_df, td)
         if LOGGER_DEBUG:
             logger.debug(f"Retrieved data for date {td}, length: {len(_df)}, first 5 rows: {_df.head().to_dict(orient='records')}")
         return _df
@@ -382,7 +322,7 @@ class UtilFuncs(UtilTools):
 
         for _td in td_list:
             try:
-                _df = UtilFuncs.get_data_by_td(ak_func_name, ak_cols_config_dict, _td, td_pa_name)
+                _df = DgAkUtilFuncs.get_data_by_td(ak_func_name, ak_cols_config_dict, _td, td_pa_name)
                 if _df.empty:
                     _retry_count += 1
                     if _retry_count >= max_retry:
@@ -416,7 +356,7 @@ class UtilFuncs(UtilTools):
                     logger.error(f"Function {ak_func_name} not found in akshare.")
                     continue
 
-                _data = UtilFuncs.try_to_call(_data_func, {'symbol': _b_name})
+                _data = DgAkUtilFuncs.try_to_call(_data_func, {'symbol': _b_name})
                 if (_data is not None) and (not _data.empty):
                     _data['b_name'] = _b_name  # Add the board name as a column to the DataFrame
                     all_data.append(_data)
@@ -429,8 +369,8 @@ class UtilFuncs(UtilTools):
 
         if all_data:
             _combined_df = pd.concat(all_data, ignore_index=True)
-            _combined_df = UtilTools.remove_cols(_combined_df, ak_cols_config_dict[ak_func_name])
-            _combined_df.rename(columns=UtilTools.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
+            _combined_df = DgAkUtilFuncs.remove_cols(_combined_df, ak_cols_config_dict[ak_func_name])
+            _combined_df.rename(columns=DgAkUtilFuncs.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
             _combined_df['s_code'] = _combined_df['s_code'].astype(str) 
             _today_date = datetime.now().strftime(date_format)
             _combined_df['td'] = _today_date
@@ -443,7 +383,7 @@ class UtilFuncs(UtilTools):
 
     # region cache tools
     @staticmethod
-    def write_list_to_redis(key: str, data_list: list, conn: redis.Redis, ttl: int = default_redis_ttl):
+    def write_list_to_redis(key: str, data_list: list, conn: redis.Redis, ttl: int = con.DEFAULT_REDIS_TTL):
         try:
             # 转换日期对象为字符串
             _data_list = [str(item) if isinstance(item, (datetime, date)) else item for item in data_list]
@@ -476,7 +416,7 @@ class UtilFuncs(UtilTools):
             return None
 
     @staticmethod
-    def write_df_to_redis(key: str, df: pd.DataFrame, conn: redis.Redis, ttl: int = default_redis_ttl):
+    def write_df_to_redis(key: str, df: pd.DataFrame, conn: redis.Redis, ttl: int = con.DEFAULT_REDIS_TTL):
         try:
             _data_json = df.to_json(date_format='iso')
             conn.setex(key, ttl, _data_json)
@@ -488,41 +428,23 @@ class UtilFuncs(UtilTools):
             logger.error(_error_msg)
             raise AirflowException(_error_msg)
 
-    @staticmethod
-    def read_df_from_redis(key: str, conn: redis.Redis) -> Optional[pd.DataFrame]:
-        try:
-            _data_json = conn.get(key)
-            if _data_json:
-                _data_json = _data_json.decode('utf-8') if isinstance(_data_json, bytes) else _data_json
-                dtype_spec = {col: str for col in con.POSSIBLE_CODE_COLUMNS}
-                _df = pd.read_json(BytesIO(_data_json.encode()), dtype=dtype_spec)
-                logger.info(f"DataFrame read from Redis for key: {key}")
-                if LOGGER_DEBUG:
-                    logger.debug(f"DataFrame length: {len(_df)}, first 5 rows: {_df.head().to_dict(orient='records')}")
-                return _df
-            else:
-                logger.warning(f"No data found in Redis for key: {key}")
-                return None
-        except Exception as _e:
-            _error_msg = f"Error reading DataFrame from Redis for key: {key}. Traceback: {traceback.format_exc()}"
-            logger.error(_error_msg)
-            raise AirflowException(_error_msg)
+
 
     @staticmethod
     def download_and_cache_ak_data_by_td(
             ak_func_name: str,
             td: Union[str, date],
             redis_conn: redis.Redis,
-            ttl: int = default_redis_ttl
+            ttl: int = con.DEFAULT_REDIS_TTL
     ) -> str:
         try:
-            _td = UtilTools.format_td8(td)
+            _td = DgAkUtilFuncs.format_td8(td)
         except Exception as _e:
             logger.error(f"Error formatting date '{td}': {_e}\n{traceback.format_exc()}")
             raise AirflowException(f"Error formatting date '{td}': {_e}")
 
         try:
-            _df = UtilFuncs.get_data_by_td(ak_func_name, _td)
+            _df = DgAkUtilFuncs.get_data_by_td(ak_func_name, _td)
             if _df is None or _df.empty:
                 if _df is None:
                     logger.error(f"Failed to obtain data for {ak_func_name} on {_td}.")
@@ -531,7 +453,7 @@ class UtilFuncs(UtilTools):
                     logger.warning(f"No data found for {ak_func_name} on {_td}, nothing written to Redis.")
                     return
             _redis_key = f'{ak_func_name}@{_td}'
-            UtilFuncs.write_df_to_redis(_redis_key, _df, redis_conn, ttl)
+            DgAkUtilFuncs.write_df_to_redis(_redis_key, _df, redis_conn, ttl)
             logger.info(f"Data for {ak_func_name} on {_td} written to Redis.")
             if LOGGER_DEBUG:
                 logger.debug(f"Redis key: {_redis_key}, Data length: {len(_df)}, first 5 rows: {_df.head().to_dict(orient='records')}")
@@ -692,7 +614,7 @@ class UtilFuncs(UtilTools):
             raise AirflowException(_e)
 
     @staticmethod
-    def get_columns_from_table(pg_conn, table_name, redis_conn: redis.Redis, ttl: int = default_redis_ttl):
+    def get_columns_from_table(pg_conn, table_name, redis_conn: redis.Redis, ttl: int = con.DEFAULT_REDIS_TTL):
         _redis_key = f"columns_{table_name}"
         if LOGGER_DEBUG:
             logger.debug(f"Fetching column names and types for table: {table_name}")

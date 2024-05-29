@@ -10,7 +10,7 @@ sys.path.append(project_root)
 
 import pandas as pd
 from datetime import timedelta, datetime
-from dg_ak.utils.util_funcs import UtilFuncs as uf
+from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dguf
 from utils.logger import logger
 import utils.config as con
 import random
@@ -34,7 +34,7 @@ pg_conn = pgsql_hook.get_conn()
 # 配置路径
 config_path = current_path / 'ak_dg_board_config.py'
 sys.path.append(config_path.parent.as_posix())
-ak_cols_config_dict = uf.load_ak_cols_config(config_path.as_posix())
+ak_cols_config_dict = dguf.load_ak_cols_config(config_path.as_posix())
 
 # 统一定义Redis keys
 BOARD_LIST_KEY_PREFIX = "board_list"
@@ -52,12 +52,12 @@ def get_board_list(board_list_func_name: str):
             pg_conn.commit()
         logger.info(f"Table ak_dg_{board_list_func_name} has been cleared.")
 
-        board_list_data_df = uf.get_data_today(board_list_func_name, ak_cols_config_dict)
+        board_list_data_df = dguf.get_data_today(board_list_func_name, ak_cols_config_dict)
         if LOGGER_DEBUG:
             logger.debug(f'length of board_list_data_df: {len(board_list_data_df)}')
             logger.debug(f'head 5 of board_list_data_df:')
             logger.debug(board_list_data_df.head(5))
-        board_list_data_df = uf.convert_columns(board_list_data_df, f'ak_dg_{board_list_func_name}', pg_conn, redis_hook.get_conn())
+        board_list_data_df = dguf.convert_columns(board_list_data_df, f'ak_dg_{board_list_func_name}', pg_conn, redis_hook.get_conn())
         
         if 'td' in board_list_data_df.columns:
             board_list_data_df['td'] = pd.to_datetime(board_list_data_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
@@ -67,14 +67,14 @@ def get_board_list(board_list_func_name: str):
             return
 
         redis_key = get_redis_key(BOARD_LIST_KEY_PREFIX, board_list_func_name)
-        uf.write_df_to_redis(redis_key, board_list_data_df, redis_hook.get_conn(), uf.default_redis_ttl)
+        dguf.write_df_to_redis(redis_key, board_list_data_df, redis_hook.get_conn(), dguf.default_redis_ttl)
 
-        temp_csv_path = uf.save_data_to_csv(board_list_data_df, board_list_func_name, include_header=True)
+        temp_csv_path = dguf.save_data_to_csv(board_list_data_df, board_list_func_name, include_header=True)
         if temp_csv_path is None:
             logger.warning(f"No CSV file created for {board_list_func_name}, skipping database insertion.")
             return
         
-        uf.insert_data_from_csv(pg_conn, temp_csv_path, f'ak_dg_{board_list_func_name}')
+        dguf.insert_data_from_csv(pg_conn, temp_csv_path, f'ak_dg_{board_list_func_name}')
 
     except Exception as e:
         logger.error(f"Failed to process data for {board_list_func_name}: {str(e)}")
@@ -92,10 +92,10 @@ def store_board_list(board_list_func_name: str):
     """
 
     try:
-        inserted_rows = uf.store_ak_data(pg_conn, board_list_func_name, insert_sql, truncate=True)
+        inserted_rows = dguf.store_ak_data(pg_conn, board_list_func_name, insert_sql, truncate=True)
         dates = list(set(row[0].strftime('%Y-%m-%d') for row in inserted_rows))  # 转换为字符串
         redis_key = get_redis_key(STORED_KEYS_KEY_PREFIX, board_list_func_name)
-        uf.write_list_to_redis(redis_key, dates, redis_hook.get_conn(), uf.default_redis_ttl)
+        dguf.write_list_to_redis(redis_key, dates, redis_hook.get_conn(), dguf.default_redis_ttl)
         logger.info(f"Data operation completed successfully for {board_list_func_name}. Dates: {dates}")
     except Exception as e:
         logger.error(f"Failed during data operations for {board_list_func_name}: {str(e)}")
@@ -103,13 +103,13 @@ def store_board_list(board_list_func_name: str):
 
 def save_tracing_board_list(board_list_func_name: str):
     redis_key = get_redis_key(STORED_KEYS_KEY_PREFIX, board_list_func_name)
-    date_list = uf.read_list_from_redis(redis_key, redis_hook.get_conn())
+    date_list = dguf.read_list_from_redis(redis_key, redis_hook.get_conn())
     logger.info(date_list)
     if not date_list:
         logger.info(f"No dates to process for {board_list_func_name}")
         return
 
-    uf.insert_tracing_date_data(pg_conn, board_list_func_name, date_list)
+    dguf.insert_tracing_date_data(pg_conn, board_list_func_name, date_list)
     logger.info(f"Tracing data saved for {board_list_func_name} on dates: {date_list}")
 
 def get_board_cons(board_list_func_name: str, board_cons_func_name: str):
@@ -122,22 +122,22 @@ def get_board_cons(board_list_func_name: str, board_cons_func_name: str):
         logger.info(f"Table ak_dg_{board_cons_func_name} has been cleared.")
 
         redis_key = get_redis_key(BOARD_LIST_KEY_PREFIX, board_list_func_name)
-        board_list_df = uf.get_df_from_redis(redis_key, redis_hook.get_conn())
+        board_list_df = dguf.get_df_from_redis(redis_key, redis_hook.get_conn())
         
         if board_list_df.empty:
             raise AirflowException(f"No dates available for {board_list_func_name}, skipping data fetch.")
         
-        board_cons_df = uf.get_data_by_board_names(board_cons_func_name, ak_cols_config_dict, board_list_df['b_name'])
-        board_cons_df = uf.convert_columns(board_cons_df, f'ak_dg_{board_cons_func_name}', pg_conn, redis_hook.get_conn())
+        board_cons_df = dguf.get_data_by_board_names(board_cons_func_name, ak_cols_config_dict, board_list_df['b_name'])
+        board_cons_df = dguf.convert_columns(board_cons_df, f'ak_dg_{board_cons_func_name}', pg_conn, redis_hook.get_conn())
         
         if 'td' in board_cons_df.columns:
             board_cons_df['td'] = pd.to_datetime(board_cons_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
         
-        temp_csv_path = uf.save_data_to_csv(board_cons_df, board_cons_func_name)
+        temp_csv_path = dguf.save_data_to_csv(board_cons_df, board_cons_func_name)
         if temp_csv_path is None:
             raise AirflowException(f"No CSV file created for {board_cons_func_name}, skipping database insertion.")
         
-        uf.insert_data_from_csv(pg_conn, temp_csv_path, f'ak_dg_{board_cons_func_name}')
+        dguf.insert_data_from_csv(pg_conn, temp_csv_path, f'ak_dg_{board_cons_func_name}')
 
     except Exception as e:
         logger.error(f"Failed to process data for {board_cons_func_name}: {str(e)}")
@@ -155,10 +155,10 @@ def store_board_cons(board_cons_func_name: str):
     """
 
     try:
-        inserted_rows = uf.store_ak_data(pg_conn, board_cons_func_name, insert_sql, truncate=True)
+        inserted_rows = dguf.store_ak_data(pg_conn, board_cons_func_name, insert_sql, truncate=True)
         keys = list(set({(row[0].strftime('%Y-%m-%d'), row[1]) for row in inserted_rows}))  # 转换为字符串
         redis_key = get_redis_key(STORED_KEYS_KEY_PREFIX, board_cons_func_name)
-        uf.write_list_to_redis(redis_key, keys, redis_hook.get_conn(), uf.default_redis_ttl)
+        dguf.write_list_to_redis(redis_key, keys, redis_hook.get_conn(), dguf.default_redis_ttl)
         logger.info(f"Data operation completed successfully for {board_cons_func_name}.")
     except Exception as e:
         logger.error(f"Failed during data operations for {board_cons_func_name}: {str(e)}")
@@ -166,12 +166,12 @@ def store_board_cons(board_cons_func_name: str):
 
 def save_tracing_board_cons(board_cons_func_name: str, param_name: str):
     redis_key = get_redis_key(STORED_KEYS_KEY_PREFIX, board_cons_func_name)
-    cons_data = uf.read_list_from_redis(redis_key, redis_hook.get_conn())
+    cons_data = dguf.read_list_from_redis(redis_key, redis_hook.get_conn())
     if not cons_data:
         logger.info(f"No constituent data to process for {board_cons_func_name}")
         return
 
-    uf.insert_tracing_date_1_param_data(pg_conn, board_cons_func_name, param_name, cons_data)
+    dguf.insert_tracing_date_1_param_data(pg_conn, board_cons_func_name, param_name, cons_data)
     logger.info(f"Tracing data saved for {board_cons_func_name} with parameter data.")
 
 def generate_dag_name(board_list_func_name: str, board_cons_func_name: str) -> str:
@@ -190,7 +190,7 @@ def generate_dag_name(board_list_func_name: str, board_cons_func_name: str) -> s
 def is_trading_day(**kwargs) -> str:
     today_str = datetime.now().strftime('%Y-%m-%d')
     today = datetime.strptime(today_str, '%Y-%m-%d').date()
-    trade_dates = uf.get_trade_dates(pg_conn)
+    trade_dates = dguf.get_trade_dates(pg_conn)
     trade_dates.sort(reverse=True)
     if LOGGER_DEBUG:
         logger.debug(f'today:{today}')

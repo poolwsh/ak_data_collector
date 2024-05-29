@@ -24,7 +24,7 @@ from airflow.operators.dummy import DummyOperator
 from airflow.utils.dates import days_ago
 from airflow.exceptions import AirflowException
 
-from dg_ak.utils.util_funcs import UtilFuncs as uf
+from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dguf
 from utils.logger import logger
 import utils.config as con
 
@@ -42,7 +42,7 @@ pg_conn = pgsql_hook.get_conn()
 # 配置路径
 config_path = Path(__file__).resolve().parent / 'ak_dg_ff_config.py'
 sys.path.append(config_path.parent.as_posix())
-ak_cols_config_dict = uf.load_ak_cols_config(config_path.as_posix())
+ak_cols_config_dict =dguf.load_ak_cols_config(config_path.as_posix())
 
 # 统一定义Redis keys
 FF_DATE_LIST_KEY_PREFIX = "ff_date_list"
@@ -77,7 +77,7 @@ def store_tracing_data(tracing_table, data):
 
 def is_trading_day(**kwargs) -> str:
     today_date = datetime.strptime(today, '%Y-%m-%d').date()
-    trade_dates = uf.get_trade_dates(pg_conn)
+    trade_dates =dguf.get_trade_dates(pg_conn)
     trade_dates.sort(reverse=True)
     if con.LOGGER_DEBUG:
         logger.debug(f'today: {today_date}')
@@ -144,7 +144,7 @@ def insert_data_with_conflict_handling(df, table_name, conflict_columns, update_
 def fetch_and_process_data(func_name, ak_func, table_name, params=None, param_key=None, b_name=None):
     logger.info(f"Processing data for {func_name}")
     try:
-        data = uf.try_to_call(ak_func, params)
+        data =dguf.try_to_call(ak_func, params)
         if data is None or data.empty:
             logger.warning(f"No data found for {func_name}")
             return
@@ -164,7 +164,7 @@ def fetch_and_process_data(func_name, ak_func, table_name, params=None, param_ke
         data.dropna(inplace=True)
 
         # Convert column order and data types
-        data = uf.convert_columns(data, table_name, pg_conn, redis_hook.get_conn())
+        data =dguf.convert_columns(data, table_name, pg_conn, redis_hook.get_conn())
 
         # Determine conflict columns and update columns
         # if table_name in ['ak_dg_stock_market_fund_flow', 'ak_dg_stock_sector_fund_flow_rank', 'ak_dg_stock_sector_fund_flow_hist', 'ak_dg_stock_concept_fund_flow_hist']:
@@ -200,7 +200,7 @@ def get_b_names_from_table(pg_conn, table_name: str, td=today) -> list:
 
 def get_data_by_s_code(func_name, cols_config):
     logger.info("Fetching stock individual fund flow data")
-    s_code_list = uf.get_s_code_list(redis_hook.get_conn())
+    s_code_list =dguf.get_s_code_list(redis_hook.get_conn())
     all_data = []
     _len_s_code_list = len(s_code_list)
     for _index, _s_code in enumerate(s_code_list, start=1):
@@ -217,12 +217,12 @@ def get_data_by_s_code(func_name, cols_config):
                      'sz' if _s_code.startswith(('0', '3')) else \
                      'bj' if _s_code.startswith(('4', '8')) else None
 
-            data = uf.try_to_call(ak_func, {'stock': _s_code, 'market': market})
+            data =dguf.try_to_call(ak_func, {'stock': _s_code, 'market': market})
             if data is None or data.empty:
                 logger.warning(f"No data found for s_code {_s_code} using function {func_name}. It may indicate that the stock is newly listed.")
                 continue
 
-            data = uf.remove_cols(data, cols_config)
+            data =dguf.remove_cols(data, cols_config)
             data.rename(columns=uf.get_col_dict(cols_config), inplace=True)
             data['s_code'] = _s_code
 
@@ -244,7 +244,7 @@ def get_data_by_s_code(func_name, cols_config):
                 data['td'] = data['td'].apply(uf.format_td10)
 
             # 转换列顺序和数据类型
-            data = uf.convert_columns(data, f'ak_dg_{func_name}_store', pg_conn, redis_hook.get_conn())
+            data =dguf.convert_columns(data, f'ak_dg_{func_name}_store', pg_conn, redis_hook.get_conn())
 
             all_data.append(data)
 
@@ -272,7 +272,7 @@ def get_stock_individual_fund_flow_rank():
 
 def get_stock_market_fund_flow():
     func_name = "stock_market_fund_flow"
-    ak_func = lambda: uf.get_data_today(func_name, ak_cols_config_dict)
+    ak_func = lambda:dguf.get_data_today(func_name, ak_cols_config_dict)
     fetch_and_process_data(func_name, ak_func, f'ak_dg_{func_name}_store')
 
 def get_stock_sector_fund_flow_rank():
@@ -285,7 +285,7 @@ def get_stock_sector_fund_flow_rank():
     for _index, _sector in enumerate(sectors, start=1):
         logger.info(f'({_index}/{len_sectors}) downloading data with sector={_sector}')
         ak_func = lambda: ak.stock_sector_fund_flow_rank(indicator='今日', sector_type=_sector)
-        data = uf.try_to_call(ak_func)
+        data =dguf.try_to_call(ak_func)
         if data is not None:
             data = process_data_columns(data, func_name)
             data['sector_type'] = _sector
@@ -311,7 +311,7 @@ def get_stock_sector_fund_flow_summary():
     for _index, _b_name in enumerate(b_names, start=1):
         logger.info(f'({_index}/{len_b_name}) downloading data with b_name={_b_name}')
         ak_func = lambda: ak.stock_sector_fund_flow_summary(symbol=_b_name, indicator='今日')
-        data = uf.try_to_call(ak_func)
+        data =dguf.try_to_call(ak_func)
         if data is not None:
             data = process_data_columns(data, func_name, b_name=_b_name)
             all_data.append(data)
@@ -327,7 +327,7 @@ def get_stock_sector_fund_flow_hist():
     for _index, _b_name in enumerate(b_names, start=1):
         logger.info(f'({_index}/{len_b_name}) downloading data with b_name={_b_name}')
         ak_func = lambda: ak.stock_sector_fund_flow_hist(symbol=_b_name)
-        data = uf.try_to_call(ak_func)
+        data =dguf.try_to_call(ak_func)
         if data is not None:
             data = process_data_columns(data, func_name, b_name=_b_name)
             all_data.append(data)
@@ -343,7 +343,7 @@ def get_stock_concept_fund_flow_hist():
     for _index, _b_name in enumerate(b_names, start=1):
         logger.info(f'({_index}/{len_b_name}) downloading data with b_name={_b_name}')
         ak_func = lambda: ak.stock_concept_fund_flow_hist(symbol=_b_name)
-        data = uf.try_to_call(ak_func)
+        data =dguf.try_to_call(ak_func)
         if data is not None:
             data = process_data_columns(data, func_name, b_name=_b_name)
             all_data.append(data)

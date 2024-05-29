@@ -15,13 +15,13 @@ import socket
 import pandas as pd
 from datetime import timedelta, datetime
 from airflow.models.dag import DAG
-from airflow.exceptions import AirflowException
+
 from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.redis.hooks.redis import RedisHook
 from airflow.utils.dates import days_ago
 
-from dg_ak.utils.util_funcs import UtilFuncs as uf
+from dags.dg_ak.utils.dg_ak_util_funcs import UtilFuncs as uf
 from utils.logger import logger
 import utils.config as con
 
@@ -71,7 +71,6 @@ def fetch_and_process_all_stock_data():
                 logger.info(f"No data found for date: {trade_date}")
                 continue
 
-            # 生成斐波那契分组区间
             bb = [3, 5, 8, 10, 15, 20]
             bins = sorted(set([-x for x in bb if x != 0] + [0] + bb))
             bins = [-float('inf')] + bins + [float('inf')]

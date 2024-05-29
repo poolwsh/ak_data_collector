@@ -15,7 +15,7 @@ current_dir = Path(__file__).resolve().parent
 project_root = current_dir.parent.parent.parent.parent
 sys.path.append(str(project_root))
 
-from dags.dg_ak.utils.util_funcs import UtilFuncs as uf
+from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dguf
 from dags.utils.logger import logger
 import dags.utils.config as con
 
@@ -137,13 +137,13 @@ def insert_code_name_to_db(code_name_list: list[tuple[str, str]]):
 def init_ak_dg_s_zh_a(ak_func_name: str, period: str, adjust: str):
     try:
         logger.info(f"Initializing data for {ak_func_name} with period={period} and adjust={adjust}")
-        s_code_name_list = uf.get_s_code_name_list(redis_hook.get_conn())
+        s_code_name_list = dguf.get_s_code_name_list(redis_hook.get_conn())
         total_codes = len(s_code_name_list)
         all_trade_dates = set()
 
         # 定义 ak_cols_config_dict
         config_path = current_dir / 'ak_dg_s-zh-a_config.py'
-        ak_cols_config_dict = uf.load_ak_cols_config(config_path.as_posix())
+        ak_cols_config_dict = dguf.load_ak_cols_config(config_path.as_posix())
 
         yesterday_date = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
 
@@ -152,17 +152,17 @@ def init_ak_dg_s_zh_a(ak_func_name: str, period: str, adjust: str):
                 break
             logger.info(f'({index + 1}/{total_codes}) Fetching data for s_code={s_code}, s_name={s_name}')
             if adjust == 'bfq':
-                stock_data_df = uf.get_s_code_data(
+                stock_data_df = dguf.get_s_code_data(
                     ak_func_name, ak_cols_config_dict, s_code, period, DEFAULT_START_DATE, yesterday_date, None
                 )
             else:
-                stock_data_df = uf.get_s_code_data(
+                stock_data_df = dguf.get_s_code_data(
                     ak_func_name, ak_cols_config_dict, s_code, period, DEFAULT_START_DATE, yesterday_date, adjust
                 )
 
             if not stock_data_df.empty:
                 stock_data_df['s_code'] = stock_data_df['s_code'].astype(str)
-                stock_data_df = uf.convert_columns(stock_data_df, f'ak_dg_{ak_func_name}_store_{period}_{adjust}', pg_conn, redis_hook.get_conn())
+                stock_data_df = dguf.convert_columns(stock_data_df, f'ak_dg_{ak_func_name}_store_{period}_{adjust}', pg_conn, redis_hook.get_conn())
                 if 'td' in stock_data_df.columns:
                     stock_data_df['td'] = pd.to_datetime(stock_data_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
 

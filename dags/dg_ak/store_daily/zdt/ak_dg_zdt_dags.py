@@ -13,7 +13,7 @@ sys.path.append(project_root)
 import socket
 import pandas as pd
 from datetime import datetime, timedelta
-from dg_ak.utils.util_funcs import UtilFuncs as uf
+from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dguf
 from utils.logger import logger
 import utils.config as con
 
@@ -34,7 +34,7 @@ pg_conn = pgsql_hook.get_conn()
 
 config_path = current_path / 'ak_dg_zdt_config.py'
 sys.path.append(config_path.parent.as_posix())
-ak_cols_config_dict = uf.load_ak_cols_config(config_path.as_posix())
+ak_cols_config_dict = dguf.load_ak_cols_config(config_path.as_posix())
 
 # 统一定义Redis keys
 ZDT_DATE_LIST_KEY_PREFIX = "zdt_date_list"
@@ -49,7 +49,7 @@ rollback_days = 10
 def get_tracing_data(ak_func_name: str):
     logger.info(f"Starting to get tracing dataframe for {ak_func_name}")
     try:
-        td_list = uf.get_trade_dates(pg_conn)
+        td_list = dguf.get_trade_dates(pg_conn)
         td_list.sort(reverse=True)
         if LOGGER_DEBUG:
             logger.debug(f'length of reversed td list from trade date table {len(td_list)}')
@@ -74,7 +74,7 @@ def get_tracing_data(ak_func_name: str):
         
         date_df = pd.DataFrame(selected_dates, columns=['td'])
         redis_key = f'{ZDT_DATE_LIST_KEY_PREFIX}_{ak_func_name}'
-        uf.write_df_to_redis(redis_key, date_df, redis_hook.get_conn(), uf.default_redis_ttl)
+        dguf.write_df_to_redis(redis_key, date_df, redis_hook.get_conn(), dguf.default_redis_ttl)
         if LOGGER_DEBUG:
             logger.debug(f"Tracing dataframe for {ak_func_name} written to Redis with key: {redis_key}")
     except Exception as e:
@@ -85,7 +85,7 @@ def get_zdt_data(ak_func_name):
     logger.info(f"Starting to save data for {ak_func_name}")
     try:
         redis_key = f'{ZDT_DATE_LIST_KEY_PREFIX}_{ak_func_name}'
-        temp_csv_path = uf.get_data_and_save2csv(redis_key, ak_func_name, ak_cols_config_dict, pg_conn, redis_hook.get_conn())
+        temp_csv_path = dguf.get_data_and_save2csv(redis_key, ak_func_name, ak_cols_config_dict, pg_conn, redis_hook.get_conn())
         if LOGGER_DEBUG:
             logger.debug(f"Data for {ak_func_name} saved to CSV at {temp_csv_path}")
 
@@ -126,7 +126,7 @@ def store_zdt_data(ak_func_name: str):
         source_table = f'ak_dg_{ak_func_name}'
         store_table = f'ak_dg_{ak_func_name}_store'
         # 动态获取表的列名        
-        columns = uf.get_columns_from_table(pg_conn, source_table, redis_hook.get_conn())
+        columns = dguf.get_columns_from_table(pg_conn, source_table, redis_hook.get_conn())
         column_names = [col[0] for col in columns]  # Extract column names
         columns_str = ', '.join(column_names)
         update_columns = ', '.join([f"{col} = EXCLUDED.{col}" for col in column_names if col not in ['td', 's_code']])
@@ -139,7 +139,7 @@ def store_zdt_data(ak_func_name: str):
             RETURNING td;
         """
         
-        inserted_rows = uf.store_ak_data(pg_conn, ak_func_name, insert_sql, truncate=False)
+        inserted_rows = dguf.store_ak_data(pg_conn, ak_func_name, insert_sql, truncate=False)
         # 提取所有 td 的最大值
         if inserted_rows:
             max_td = max(row[0] for row in inserted_rows)
@@ -148,7 +148,7 @@ def store_zdt_data(ak_func_name: str):
                 logger.debug(f"Max td to store in Redis for {ak_func_name}: {max_td}")
 
             redis_key = f"{STORED_KEYS_KEY_PREFIX}@{ak_func_name}"
-            uf.write_list_to_redis(redis_key, [max_td.strftime('%Y-%m-%d')], redis_hook.get_conn())
+            dguf.write_list_to_redis(redis_key, [max_td.strftime('%Y-%m-%d')], redis_hook.get_conn())
             logger.info(f"Data operation completed successfully for {ak_func_name}. Max td: {max_td}")
         else:
             logger.warning(f"No rows inserted for {ak_func_name}, skipping Redis update.")
@@ -161,7 +161,7 @@ def update_tracing_data(ak_func_name):
     logger.info(f"Preparing to insert tracing data for {ak_func_name}")
     try:
         redis_key = f"{STORED_KEYS_KEY_PREFIX}@{ak_func_name}"
-        date_list = uf.read_list_from_redis(redis_key, redis_hook.get_conn())
+        date_list = dguf.read_list_from_redis(redis_key, redis_hook.get_conn())
         if LOGGER_DEBUG:
             logger.debug(f"Date list from Redis: {date_list}")
 

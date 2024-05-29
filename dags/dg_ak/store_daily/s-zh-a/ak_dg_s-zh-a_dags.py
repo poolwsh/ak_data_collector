@@ -21,7 +21,7 @@ from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.redis.hooks.redis import RedisHook
 from airflow.utils.dates import days_ago
 
-from dg_ak.utils.util_funcs import UtilFuncs as uf
+from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dguf
 from utils.logger import logger
 import utils.config as con
 
@@ -36,7 +36,7 @@ pg_conn = pgsql_hook.get_conn()
 # 配置路径
 config_path = current_path / 'ak_dg_s-zh-a_config.py'
 sys.path.append(config_path.parent.as_posix())
-ak_cols_config_dict = uf.load_ak_cols_config(config_path.as_posix())
+ak_cols_config_dict =dguf.load_ak_cols_config(config_path.as_posix())
 
 # Redis keys 前缀
 ARG_LIST_CACHE_PREFIX = "ak_dg_s_zh_a_arg_list"
@@ -47,7 +47,7 @@ TRADE_DATE_TABLE_NAME = 'ak_dg_stock_zh_a_trade_date'
 STOCK_CODE_NAME_TABLE = 'ak_dg_stock_zh_a_code_name'
 
 # 定义昨天的日期、默认开始日期和批次大小
-default_end_date = uf.format_td8(datetime.now()) # - timedelta(days=1)
+default_end_date =dguf.format_td8(datetime.now()) # - timedelta(days=1)
 default_start_date = con.zh_a_default_start_date
 batch_size = 50  # 根据需求调整批次大小
 rollback_days = 15  # 回滚天数
@@ -71,7 +71,7 @@ def insert_code_name_to_db(code_name_list: list[tuple[str, str]]):
         raise AirflowException(e)
 
 def prepare_arg_list(ak_func_name: str, period: str, adjust: str):
-    _tracing_df = uf.get_tracing_data_df(pg_conn, TRACING_TABLE_NAME)
+    _tracing_df =dguf.get_tracing_data_df(pg_conn, TRACING_TABLE_NAME)
     _current_tracing_df = _tracing_df[
         (_tracing_df['ak_func_name'] == ak_func_name) &
         (_tracing_df['period'] == period) &
@@ -79,7 +79,7 @@ def prepare_arg_list(ak_func_name: str, period: str, adjust: str):
     ]
     _tracing_dict = dict(zip(_current_tracing_df['scode'].values, _current_tracing_df['last_td'].values))
 
-    _s_code_name_list = uf.get_s_code_name_list(redis_hook.get_conn())
+    _s_code_name_list =dguf.get_s_code_name_list(redis_hook.get_conn())
     insert_code_name_to_db(_s_code_name_list)
     
     _arg_list = []
@@ -88,17 +88,17 @@ def prepare_arg_list(ak_func_name: str, period: str, adjust: str):
 
         if _start_date != default_start_date:
             _start_date = (datetime.strptime(str(_start_date), '%Y-%m-%d') - timedelta(days=rollback_days)).strftime('%Y-%m-%d')
-        _arg_list.append((_s_code, uf.format_td8(_start_date), default_end_date))
+        _arg_list.append((_s_code,dguf.format_td8(_start_date), default_end_date))
 
     _redis_key = f"{ARG_LIST_CACHE_PREFIX}@{ak_func_name}@{period}@{adjust}"
-    uf.write_list_to_redis(_redis_key, _arg_list, redis_hook.get_conn())
+    dguf.write_list_to_redis(_redis_key, _arg_list, redis_hook.get_conn())
     logger.info(f"Argument list for {ak_func_name} with period={period} and adjust={adjust} has been prepared and cached.")
 
 def get_stock_data(ak_func_name: str, period: str, adjust: str):
     logger.info(f"Starting to save data for {ak_func_name} with period={period} and adjust={adjust}")
     try:
         _redis_key = f"{ARG_LIST_CACHE_PREFIX}@{ak_func_name}@{period}@{adjust}"
-        _arg_list = uf.read_list_from_redis(_redis_key, redis_hook.get_conn())
+        _arg_list = dguf.read_list_from_redis(_redis_key, redis_hook.get_conn())
 
         if not _arg_list:
             raise AirflowException(f"No arguments available for {ak_func_name}, skipping data fetch.")
@@ -120,11 +120,11 @@ def get_stock_data(ak_func_name: str, period: str, adjust: str):
         for _index, (_s_code, _start_date, _end_date) in enumerate(_arg_list):
             logger.info(f'({_index + 1}/{_total_codes}) Fetching data for s_code={_s_code} from {_start_date} to {_end_date}')
             if adjust == 'bfq':
-                _stock_data_df = uf.get_s_code_data(
+                _stock_data_df =dguf.get_s_code_data(
                     ak_func_name, ak_cols_config_dict, _s_code, period, _start_date, _end_date, None
                 )
             else:
-                _stock_data_df = uf.get_s_code_data(
+                _stock_data_df =dguf.get_s_code_data(
                     ak_func_name, ak_cols_config_dict, _s_code, period, _start_date, _end_date, adjust
                 )
 
@@ -139,17 +139,17 @@ def get_stock_data(ak_func_name: str, period: str, adjust: str):
                     logger.debug(f"Combined DataFrame columns for {ak_func_name}: {_combined_df.columns}")
 
                 _combined_df['s_code'] = _combined_df['s_code'].astype(str)
-                _combined_df = uf.convert_columns(_combined_df, f'ak_dg_{ak_func_name}_{period}_{adjust}', pg_conn, redis_hook.get_conn())
+                _combined_df =dguf.convert_columns(_combined_df, f'ak_dg_{ak_func_name}_{period}_{adjust}', pg_conn, redis_hook.get_conn())
 
                 if 'td' in _combined_df.columns:
                     _combined_df['td'] = pd.to_datetime(_combined_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
 
-                _temp_csv_path = uf.save_data_to_csv(_combined_df, f'{ak_func_name}_{period}_{adjust}')
+                _temp_csv_path =dguf.save_data_to_csv(_combined_df, f'{ak_func_name}_{period}_{adjust}')
                 if _temp_csv_path is None:
                     raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
 
                 # 将数据从 CSV 导入数据库
-                uf.insert_data_from_csv(pg_conn, _temp_csv_path, f'ak_dg_{ak_func_name}_{period}_{adjust}')
+                dguf.insert_data_from_csv(pg_conn, _temp_csv_path, f'ak_dg_{ak_func_name}_{period}_{adjust}')
 
                 # 更新交易日期到 trade_date 表
                 _trade_dates = list(all_trade_dates)
@@ -178,7 +178,7 @@ def store_stock_data(ak_func_name: str, period: str, adjust: str):
         source_table = f'ak_dg_{ak_func_name}_{period}_{adjust}'
         store_table = f'ak_dg_{ak_func_name}_store_{period}_{adjust}'
         # Dynamically retrieve the column names from the table
-        columns = uf.get_columns_from_table(pg_conn, source_table, redis_hook.get_conn())
+        columns =dguf.get_columns_from_table(pg_conn, source_table, redis_hook.get_conn())
         column_names = [col[0] for col in columns]  # Extract only the column names
         columns_str = ', '.join(column_names)
         update_columns = ', '.join([f"{col} = EXCLUDED.{col}" for col in column_names if col not in ['s_code', 'td']])
@@ -191,7 +191,7 @@ def store_stock_data(ak_func_name: str, period: str, adjust: str):
             RETURNING s_code, td;
         """
 
-        _inserted_rows = uf.store_ak_data(pg_conn, ak_func_name, _insert_sql, truncate=False)
+        _inserted_rows =dguf.store_ak_data(pg_conn, ak_func_name, _insert_sql, truncate=False)
         if LOGGER_DEBUG:
             logger.debug(f"Inserted rows for {ak_func_name}: {_inserted_rows}")
 
@@ -209,7 +209,7 @@ def store_stock_data(ak_func_name: str, period: str, adjust: str):
         _keys_str = {k: v.strftime('%Y-%m-%d') for k, v in _keys.items()}
 
         _redis_key = f"{STORE_LIST_CACHE_PREFIX}@{ak_func_name}@{period}@{adjust}"
-        uf.write_list_to_redis(_redis_key, list(_keys_str.items()), redis_hook.get_conn())
+        dguf.write_list_to_redis(_redis_key, list(_keys_str.items()), redis_hook.get_conn())
         logger.info(f"Data operation completed successfully for {ak_func_name}. Keys: {_keys}")
 
     except Exception as e:
@@ -219,7 +219,7 @@ def store_stock_data(ak_func_name: str, period: str, adjust: str):
 
 def update_tracing_date(ak_func_name: str, period: str, adjust: str):
     _redis_key = f"{STORE_LIST_CACHE_PREFIX}@{ak_func_name}@{period}@{adjust}"
-    _stored_keys = uf.read_list_from_redis(_redis_key, redis_hook.get_conn())
+    _stored_keys =dguf.read_list_from_redis(_redis_key, redis_hook.get_conn())
     if not _stored_keys:
         logger.info(f"No keys to process for {ak_func_name}")
         return
@@ -279,7 +279,7 @@ def generate_dag(stock_func, period, adjust):
         default_args=default_args,
         description=f'利用akshare的函数{stock_func}(period={period}, adjust={adjust})下载个股行情相关数据',
         start_date=days_ago(1),
-        schedule=uf.generate_random_minute_schedule(hour=8), # 北京时间: 8+8=16
+        schedule=dguf.generate_random_minute_schedule(hour=8), # 北京时间: 8+8=16
         catchup=False,
         tags=['akshare', 'store_daily', '个股行情'],
         max_active_runs=1,

@@ -12,4 +12,7 @@ STOCK_A_REALTIME_KEY= "stock_a_realtime"
 POSSIBLE_CODE_COLUMNS = ['s_code', 'stock_code']
 
 LOGGER_DEBUG = True
+
 zh_a_default_start_date = "1980-01-01"
+
+DEFAULT_REDIS_TTL = 60 * 60  # 1 hour
