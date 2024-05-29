@@ -4,7 +4,7 @@ import os
 import sys
 from pathlib import Path
 current_path = Path(__file__).resolve().parent 
-project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..'))
+project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..', '..'))
 print(project_root)
 # 将项目根目录添加到sys.path中
 sys.path.append(project_root)
@@ -74,7 +74,7 @@ def get_tracing_data(ak_func_name: str):
         
         date_df = pd.DataFrame(selected_dates, columns=['td'])
         redis_key = f'{ZDT_DATE_LIST_KEY_PREFIX}_{ak_func_name}'
-        dguf.write_df_to_redis(redis_key, date_df, redis_hook.get_conn(), dguf.default_redis_ttl)
+        dguf.write_df_to_redis(redis_key, date_df, redis_hook.get_conn(), con.DEFAULT_REDIS_TTL)
         if LOGGER_DEBUG:
             logger.debug(f"Tracing dataframe for {ak_func_name} written to Redis with key: {redis_key}")
     except Exception as e:
@@ -225,7 +225,7 @@ def generate_dag(ak_func_name: str):
         description=f'利用akshare的函数{ak_func_name}下载涨跌停相关数据',
         start_date=days_ago(1),
         
-        schedule=uf.generate_random_minute_schedule(hour=9), # 北京时间: 9+8=17
+        schedule=dguf.generate_random_minute_schedule(hour=9), # 北京时间: 9+8=17
         catchup=False,
         tags=['akshare', 'store_daily', '涨跌停'],
         max_active_runs=1,

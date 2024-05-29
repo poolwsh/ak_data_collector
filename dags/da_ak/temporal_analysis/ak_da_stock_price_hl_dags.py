@@ -1,10 +1,14 @@
 from __future__ import annotations
-
-import sys
 import os
-import socket
+import sys
 from pathlib import Path
-from datetime import datetime, timedelta
+current_path = Path(__file__).resolve().parent 
+project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..'))
+print(project_root)
+# 将项目根目录添加到sys.path中
+sys.path.append(project_root)
+
+
 import pandas as pd
 from airflow.exceptions import AirflowException
 from airflow.providers.postgres.hooks.postgres import PostgresHook
@@ -15,7 +19,7 @@ current_dir = Path(__file__).resolve().parent
 project_root = current_dir.parent.parent.parent.parent
 sys.path.append(str(project_root))
 
-from dags.dg_ak.utils.dg_ak_util_funcs import UtilFuncs as uf
+from dags.da_ak.utils.da_ak_util_funcs import DaAkUtilFuncs as dauf
 from dags.utils.logger import logger
 import dags.utils.config as con
 
@@ -114,14 +118,14 @@ def calculate_price_hl(stock_data: pd.DataFrame, intervals: list[int]) -> pd.Dat
 def init_ak_dg_price_hl(ak_func_name: str, period: str, adjust: str, intervals: list[int]):
     try:
         logger.info(f"Initializing data for {ak_func_name} with period={period} and adjust={adjust}")
-        s_code_name_list = uf.get_s_code_name_list(redis_hook.get_conn())
+        s_code_name_list = dauf.get_s_code_name_list(redis_hook.get_conn())
         total_codes = len(s_code_name_list)
 
         for index, (s_code, s_name) in enumerate(s_code_name_list):
             if LOGGER_DEBUG and index >= 5:
                 break
             logger.info(f'({index + 1}/{total_codes}) Fetching data for s_code={s_code}, s_name={s_name}')
-            stock_data_df = uf.get_stock_data(s_code, adjust, pg_conn)
+            stock_data_df = dauf.get_stock_data(s_code, adjust, pg_conn)
             if not stock_data_df.empty:
                 stock_data_df['td'] = pd.to_datetime(stock_data_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
                 price_hl_df = calculate_price_hl(stock_data_df, intervals)

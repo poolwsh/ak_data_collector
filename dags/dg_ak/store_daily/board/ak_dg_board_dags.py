@@ -3,7 +3,7 @@ import os
 import sys
 from pathlib import Path
 current_path = Path(__file__).resolve().parent 
-project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..'))
+project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..','..'))
 print(project_root)
 # 将项目根目录添加到sys.path中
 sys.path.append(project_root)
@@ -67,7 +67,7 @@ def get_board_list(board_list_func_name: str):
             return
 
         redis_key = get_redis_key(BOARD_LIST_KEY_PREFIX, board_list_func_name)
-        dguf.write_df_to_redis(redis_key, board_list_data_df, redis_hook.get_conn(), dguf.default_redis_ttl)
+        dguf.write_df_to_redis(redis_key, board_list_data_df, redis_hook.get_conn(), con.DEFAULT_REDIS_TTL)
 
         temp_csv_path = dguf.save_data_to_csv(board_list_data_df, board_list_func_name, include_header=True)
         if temp_csv_path is None:
@@ -95,7 +95,7 @@ def store_board_list(board_list_func_name: str):
         inserted_rows = dguf.store_ak_data(pg_conn, board_list_func_name, insert_sql, truncate=True)
         dates = list(set(row[0].strftime('%Y-%m-%d') for row in inserted_rows))  # 转换为字符串
         redis_key = get_redis_key(STORED_KEYS_KEY_PREFIX, board_list_func_name)
-        dguf.write_list_to_redis(redis_key, dates, redis_hook.get_conn(), dguf.default_redis_ttl)
+        dguf.write_list_to_redis(redis_key, dates, redis_hook.get_conn(), con.DEFAULT_REDIS_TTL)
         logger.info(f"Data operation completed successfully for {board_list_func_name}. Dates: {dates}")
     except Exception as e:
         logger.error(f"Failed during data operations for {board_list_func_name}: {str(e)}")
@@ -122,7 +122,7 @@ def get_board_cons(board_list_func_name: str, board_cons_func_name: str):
         logger.info(f"Table ak_dg_{board_cons_func_name} has been cleared.")
 
         redis_key = get_redis_key(BOARD_LIST_KEY_PREFIX, board_list_func_name)
-        board_list_df = dguf.get_df_from_redis(redis_key, redis_hook.get_conn())
+        board_list_df = dguf.read_df_from_redis(redis_key, redis_hook.get_conn())
         
         if board_list_df.empty:
             raise AirflowException(f"No dates available for {board_list_func_name}, skipping data fetch.")
@@ -158,7 +158,7 @@ def store_board_cons(board_cons_func_name: str):
         inserted_rows = dguf.store_ak_data(pg_conn, board_cons_func_name, insert_sql, truncate=True)
         keys = list(set({(row[0].strftime('%Y-%m-%d'), row[1]) for row in inserted_rows}))  # 转换为字符串
         redis_key = get_redis_key(STORED_KEYS_KEY_PREFIX, board_cons_func_name)
-        dguf.write_list_to_redis(redis_key, keys, redis_hook.get_conn(), dguf.default_redis_ttl)
+        dguf.write_list_to_redis(redis_key, keys, redis_hook.get_conn(), con.DEFAULT_REDIS_TTL)
         logger.info(f"Data operation completed successfully for {board_cons_func_name}.")
     except Exception as e:
         logger.error(f"Failed during data operations for {board_cons_func_name}: {str(e)}")

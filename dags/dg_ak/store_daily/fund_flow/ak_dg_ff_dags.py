@@ -4,7 +4,7 @@ import os
 import sys
 from pathlib import Path
 current_path = Path(__file__).resolve().parent 
-project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..'))
+project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..', '..'))
 print(project_root)
 # 将项目根目录添加到sys.path中
 sys.path.append(project_root)
@@ -106,7 +106,7 @@ def process_data_columns(data, func_name, s_code=None, b_name=None):
             if con.LOGGER_DEBUG:
                 logger.debug(f"Column {col} not found in data, skipping removal.")
 
-    data.rename(columns=uf.get_col_dict(cols_config), inplace=True)
+    data.rename(columns=dguf.get_col_dict(cols_config), inplace=True)
     if s_code:
         data['s_code'] = s_code
     if b_name:
@@ -158,7 +158,7 @@ def fetch_and_process_data(func_name, ak_func, table_name, params=None, param_ke
         if 'td' not in data.columns:
             data['td'] = today
         else:
-            data['td'] = data['td'].apply(uf.format_td10)
+            data['td'] = data['td'].apply(dguf.format_td10)
 
         # Remove rows with null values and ensure date validity
         data.dropna(inplace=True)
@@ -167,7 +167,6 @@ def fetch_and_process_data(func_name, ak_func, table_name, params=None, param_ke
         data =dguf.convert_columns(data, table_name, pg_conn, redis_hook.get_conn())
 
         # Determine conflict columns and update columns
-        # if table_name in ['ak_dg_stock_market_fund_flow', 'ak_dg_stock_sector_fund_flow_rank', 'ak_dg_stock_sector_fund_flow_hist', 'ak_dg_stock_concept_fund_flow_hist']:
         if table_name in ['ak_dg_stock_sector_fund_flow_rank_store', 'stock_sector_fund_flow_summary_store', 'ak_dg_stock_sector_fund_flow_hist_store', 'ak_dg_stock_concept_fund_flow_hist_store']:
             conflict_columns = ['td', 'b_name']
         elif table_name in ['ak_dg_stock_market_fund_flow_store']:
@@ -223,25 +222,13 @@ def get_data_by_s_code(func_name, cols_config):
                 continue
 
             data =dguf.remove_cols(data, cols_config)
-            data.rename(columns=uf.get_col_dict(cols_config), inplace=True)
+            data.rename(columns=dguf.get_col_dict(cols_config), inplace=True)
             data['s_code'] = _s_code
-
-            # Ensure data has expected columns
-            # expected_columns = set(uf.get_col_dict(cols_config).values())
-            # if con.LOGGER_DEBUG:
-            #     logger.debug(f'expected_columns:{expected_columns}')
-            #     logger.debug(f'data.columns:{data.columns}')
-            # missing_columns = expected_columns - set(data.columns)
-            # if missing_columns:
-            #     logger.error(f"Missing columns for s_code {_s_code} using function {func_name}: {missing_columns}")
-            #     continue
-
-            # data = process_data_columns(data, func_name, s_code=_s_code)
 
             # 删除包含空值或缺失值的行，并确保日期有效
             data.dropna(inplace=True)
             if 'td' in data.columns:
-                data['td'] = data['td'].apply(uf.format_td10)
+                data['td'] = data['td'].apply(dguf.format_td10)
 
             # 转换列顺序和数据类型
             data =dguf.convert_columns(data, f'ak_dg_{func_name}_store', pg_conn, redis_hook.get_conn())

@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 current_path = Path(__file__).resolve().parent 
-project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..'))
+project_root = os.path.abspath(os.path.join(current_path, '..', '..'))
 print(project_root)
 # 将项目根目录添加到sys.path中
 sys.path.append(project_root)
@@ -21,7 +21,7 @@ from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.redis.hooks.redis import RedisHook
 from airflow.utils.dates import days_ago
 
-from dags.dg_ak.utils.dg_ak_util_funcs import UtilFuncs as uf
+from dags.da_ak.utils.da_ak_util_funcs import DaAkUtilFuncs as dauf
 from utils.logger import logger
 import utils.config as con
 

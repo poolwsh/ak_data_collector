@@ -8,7 +8,6 @@ print(project_root)
 # 将项目根目录添加到sys.path中
 sys.path.append(project_root)
 
-import csv
 import json
 import time
 import redis
@@ -16,7 +15,6 @@ import socket
 import traceback
 import pandas as pd
 import akshare as ak
-from io import BytesIO
 from datetime import date, datetime, timedelta
 from typing import Optional, Union
 
@@ -105,9 +103,6 @@ class DgAkUtilFuncs(AkUtilTools):
             logger.debug(f"Total merged data shape: {_df_result.shape}, first 5 rows: {_df_result.head().to_dict(orient='records')}")
         return _df_result
 
-    @staticmethod
-    def store_trade_date():
-        raise NotImplementedError
     # endregion stock funcs
 
     # region tool funcs
@@ -176,24 +171,6 @@ class DgAkUtilFuncs(AkUtilTools):
             logger.debug(f"Data saved to CSV at {_temp_csv_path}, length: {len(_ak_data_df)}, first 5 rows: {_ak_data_df.head().to_dict(orient='records')}")
         return _temp_csv_path
 
-
-    @staticmethod
-    def pref_s_code(s_code):
-        _pref = 'unknown_'
-        if s_code.startswith('00'):
-            _pref = 'szmb_'
-        elif s_code.startswith('30'):
-            _pref = 'szcy_'
-        elif s_code.startswith('60'):
-            _pref = 'shmb_'
-        elif s_code.startswith('68'):
-            _pref = 'shkc_'
-        elif s_code.startswith(('83', '87', '88')):
-            _pref = 'bj_'
-        if LOGGER_DEBUG:
-            logger.debug(f"Prefixed s_code: {_pref + s_code}")
-        return _pref + s_code
-
     @staticmethod
     def generate_dt_list(begin_dt, end_dt, dt_format='%Y-%m-%d', ascending=False):
         _start = datetime.strptime(DgAkUtilFuncs.format_td10(begin_dt), '%Y-%m-%d')
@@ -210,7 +187,6 @@ class DgAkUtilFuncs(AkUtilTools):
         if LOGGER_DEBUG:
             logger.debug(f"Generated date list length: {len(_date_list)}, first 5 dates: {_date_list[:5]}")
         return _date_list
-
 
     @staticmethod
     def try_to_call(
@@ -251,9 +227,6 @@ class DgAkUtilFuncs(AkUtilTools):
                 raise AirflowException()
         logger.error(f'Failed to call function {ak_func.__name__} after {num_retries} attempts with parameters: {_param_dict}')
         return None
-
-
-
 
     @staticmethod
     def get_data_today(ak_func_name: str, ak_cols_config_dict: dict, date_format: str = '%Y-%m-%d') -> pd.DataFrame:
@@ -382,53 +355,6 @@ class DgAkUtilFuncs(AkUtilTools):
     # endregion tool funcs
 
     # region cache tools
-    @staticmethod
-    def write_list_to_redis(key: str, data_list: list, conn: redis.Redis, ttl: int = con.DEFAULT_REDIS_TTL):
-        try:
-            # 转换日期对象为字符串
-            _data_list = [str(item) if isinstance(item, (datetime, date)) else item for item in data_list]
-            _data_json = json.dumps(_data_list)
-            conn.setex(key, ttl, _data_json)
-            logger.info(f"List written to Redis under key: {key} with TTL {ttl} seconds.")
-            if LOGGER_DEBUG:
-                logger.debug(f"List length: {len(_data_list)}, first 5 items: {_data_list[:5]}")
-        except Exception as _e:
-            logger.error(f"Error writing list to Redis: {str(_e)}")
-            raise AirflowException(f"Error writing list to Redis: {str(_e)}")
-
-
-    @staticmethod
-    def read_list_from_redis(key: str, conn: redis.Redis) -> Optional[list]:
-        try:
-            _data_json = conn.get(key)
-            if (_data_json):
-                _data_list = json.loads(_data_json)
-                _data_list = [datetime.strptime(item, '%Y-%m-%d').date() if len(item) == 10 else item for item in _data_list]
-                logger.info(f"List retrieved from Redis for key: {key}")
-                if LOGGER_DEBUG:
-                    logger.debug(f"List length: {len(_data_list)}, first 5 items: {_data_list[:5]}")
-                return _data_list
-            else:
-                logger.warning(f"No data found in Redis for key: {key}")
-                return None
-        except Exception as _e:
-            logger.error(f"Error reading list from Redis for key: {key}: {_e}")
-            return None
-
-    @staticmethod
-    def write_df_to_redis(key: str, df: pd.DataFrame, conn: redis.Redis, ttl: int = con.DEFAULT_REDIS_TTL):
-        try:
-            _data_json = df.to_json(date_format='iso')
-            conn.setex(key, ttl, _data_json)
-            logger.info(f"DataFrame written to Redis under key: {key} with TTL {ttl} seconds.")
-            if LOGGER_DEBUG:
-                logger.debug(f"DataFrame length: {len(df)}, first 5 rows: {df.head().to_dict(orient='records')}")
-        except Exception as _e:
-            _error_msg = f"Error writing DataFrame to Redis for key: {key}. Traceback: {traceback.format_exc()}"
-            logger.error(_error_msg)
-            raise AirflowException(_error_msg)
-
-
 
     @staticmethod
     def download_and_cache_ak_data_by_td(
@@ -473,38 +399,6 @@ class DgAkUtilFuncs(AkUtilTools):
             exec(_file.read(), {}, _config)
         return _config['ak_cols_config']
 
-    @staticmethod
-    def write_df_to_redis(key: str, df: pd.DataFrame, conn, ttl: int):
-        try:
-            _data_json = df.to_json(date_format='iso')
-            conn.setex(key, ttl, _data_json)
-            logger.info(f"DataFrame written to Redis under key: {key} with TTL {ttl} seconds.")
-            if LOGGER_DEBUG:
-                logger.debug(f"DataFrame length: {len(df)}, first 5 rows: {df.head().to_dict(orient='records')}")
-        except Exception as _e:
-            logger.error(f"Error writing DataFrame to Redis: {str(_e)}")
-            raise AirflowException(f"Error writing DataFrame to Redis: {str(_e)}")
-
-    @staticmethod
-    def get_df_from_redis(key: str, conn):
-        if key is None:
-            logger.error("Key is None, cannot retrieve data from Redis.")
-            return pd.DataFrame()  # Return an empty DataFrame if the key is None
-
-        try:
-            _data_json = conn.get(key)
-            if not _data_json:
-                logger.warning(f"No data found in Redis for key: {key}")
-                return pd.DataFrame()  # Return an empty DataFrame if no data found
-
-            _df = pd.read_json(BytesIO(_data_json), dtype=str)
-            logger.info(f"DataFrame retrieved from Redis for key: {key}")
-            if LOGGER_DEBUG:
-                logger.debug(f"DataFrame length: {len(_df)}, first 5 rows: {_df.head().to_dict(orient='records')}")
-            return _df
-        except Exception as _e:
-            logger.error(f"Error reading DataFrame from Redis for key: {key}: {_e}")
-            return pd.DataFrame()  # Return an empty DataFrame on error
 
     @staticmethod
     def store_ak_data(pg_conn, ak_func_name, insert_sql, truncate=False):
@@ -534,164 +428,6 @@ class DgAkUtilFuncs(AkUtilTools):
             raise
         finally:
             _cursor.close()
-
-    @staticmethod
-    def push_data(context, key, value):
-        if hasattr(context, 'xcom_push'):
-            context.xcom_push(key=key, value=value)
-        elif isinstance(context, redis.Redis):
-            context.set(key, value)
-        else:
-            raise ValueError("Unsupported context provided for data push.")
-
-    @staticmethod
-    def pull_data(context, key):
-        if hasattr(context, 'xcom_pull'):
-            return context.xcom_pull(key=key)
-        else:
-            raise ValueError("Context does not support xcom_pull operation.")
-
-    @staticmethod
-    def save_data_to_csv(df, filename, dir_path='/tmp/ak_data', include_header=True):
-        if df.empty:
-            logger.warning("No data to save to CSV.")
-            return None
-        try:
-            os.makedirs(dir_path, exist_ok=True)  # Ensure the directory exists
-            _file_path = os.path.join(dir_path, f"{filename}.csv")
-            df.to_csv(_file_path, index=False, header=include_header)
-            logger.info(f"Data saved to CSV at {_file_path}")
-            if LOGGER_DEBUG:
-                logger.debug(f"CSV data length: {len(df)}, first 5 rows: {df.head().to_dict(orient='records')}")
-            return _file_path
-        except Exception as _e:
-            logger.error(f"Failed to save data to CSV: {_e}")
-            return None
-
-    @staticmethod
-    def insert_data_from_csv(conn, csv_path, table_name):
-        if not os.path.exists(csv_path):
-            logger.error("CSV file does not exist.")
-            return
-        try:
-            _cursor = conn.cursor()
-            with open(csv_path, 'r') as _file:
-                _copy_sql = f"COPY {table_name} FROM STDIN WITH CSV HEADER DELIMITER ','"
-                _cursor.copy_expert(sql=_copy_sql, file=_file)
-                conn.commit()
-                logger.info(f"Data from {csv_path} successfully loaded into {table_name}.")
-            _cursor.close()
-        except Exception as _e:
-            conn.rollback()
-            logger.error(f"Failed to load data from CSV: {_e}")
-            raise AirflowException(_e)
-
-    @staticmethod
-    def insert_data_from_csv1(conn, csv_path, table_name):
-        if not os.path.exists(csv_path):
-            logger.error("CSV file does not exist.")
-            return
-        try:
-            _cursor = conn.cursor()
-            with open(csv_path, 'r') as _file:
-                _csvreader = csv.reader(_file)
-                _header = next(_csvreader)
-
-                for _row in _csvreader:
-                    _placeholders = ','.join(['%s'] * len(_row))
-                    _insert_sql = f"""
-                    INSERT INTO {table_name} ({','.join(_header)})
-                    VALUES ({_placeholders});
-                    """
-                    _cursor.execute(_insert_sql, _row)
-
-            conn.commit()
-            logger.info(f"Data from {csv_path} successfully loaded into {table_name}.")
-            _cursor.close()
-        except Exception as _e:
-            conn.rollback()
-            logger.error(f"Failed to load data from CSV: {_e}")
-            raise AirflowException(_e)
-
-    @staticmethod
-    def get_columns_from_table(pg_conn, table_name, redis_conn: redis.Redis, ttl: int = con.DEFAULT_REDIS_TTL):
-        _redis_key = f"columns_{table_name}"
-        if LOGGER_DEBUG:
-            logger.debug(f"Fetching column names and types for table: {table_name}")
-
-        try:
-            _cached_columns = redis_conn.get(_redis_key)
-            if _cached_columns:
-                _columns = json.loads(_cached_columns)
-                logger.info(f"Retrieved column names and types for table '{table_name}' from Redis.")
-                if LOGGER_DEBUG:
-                    logger.debug(f"Cached columns length: {len(_columns)}, first 5 columns: {_columns[:5]}")
-                return _columns
-        except Exception as _e:
-            logger.warning(f"Failed to read column names and types from Redis for table '{table_name}': {_e}")
-
-        _columns = []
-        _cursor = pg_conn.cursor()
-        try:
-            _cursor.execute(
-                """
-                SELECT column_name, data_type 
-                FROM information_schema.columns 
-                WHERE table_name = %s 
-                ORDER BY ordinal_position
-                """,
-                (table_name,)
-            )
-            _columns = [(row[0], row[1]) for row in _cursor.fetchall()]
-            try:
-                redis_conn.setex(_redis_key, ttl, json.dumps(_columns))
-                logger.info(f"Retrieved column names and types for table '{table_name}' from PostgreSQL and cached in Redis.")
-                if LOGGER_DEBUG:
-                    logger.debug(f"Columns for table {table_name} length: {len(_columns)}, first 5 columns: {_columns[:5]}")
-            except Exception as _e:
-                logger.warning(f"Failed to cache column names and types in Redis for table '{table_name}': {_e}")
-        except Exception as _e:
-            logger.error(f"Error fetching column names and types from table '{table_name}': {_e}")
-        finally:
-            _cursor.close()
-
-        return _columns
-
-
-
-    @staticmethod
-    def convert_columns(df, table_name, pg_conn, redis_conn: redis.Redis):
-        _columns = UtilFuncs.get_columns_from_table(pg_conn, table_name, redis_conn)
-        if LOGGER_DEBUG:
-            logger.debug(f"Columns for table {table_name}: {_columns}")
-        if _columns is None or len(_columns) < 1:
-            raise AirflowException(f"Can't find columns using table_name {table_name}")
-
-        # 提取列名和类型
-        column_names = [col[0] for col in _columns]
-        column_types = {col[0]: col[1] for col in _columns}
-
-        if con.LOGGER_DEBUG:
-            logger.debug('column_names')
-            logger.debug(column_names)
-        # 根据列名对 DataFrame 进行筛选
-        df = df[column_names]
-
-        # 根据类型信息进行转换
-        for col, col_type in column_types.items():
-            if col_type in ['bigint', 'integer']:
-                df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')  # 使用 Pandas 的整数类型
-            elif col_type in ['decimal', 'numeric']:
-                df[col] = pd.to_numeric(df[col], errors='coerce')  # 将无法转换的值转换为 NaN
-            elif col_type == 'boolean':
-                df[col] = df[col].astype(bool)
-            elif col_type == 'date':
-                df[col] = pd.to_datetime(df[col], errors='coerce').dt.date
-            elif col_type == 'timestamp':
-                df[col] = pd.to_datetime(df[col], errors='coerce')
-
-        return df
-
 
     # endregion store once
 
@@ -736,13 +472,13 @@ class DgAkUtilFuncs(AkUtilTools):
         _end_date = datetime.now() - timedelta(days=1)
         _end_str = _end_date.strftime('%Y-%m-%d')
 
-        _all_date_list = UtilFuncs.generate_date_list(begin, _end_str, ascending=False)
+        _all_date_list = DgAkUtilFuncs.generate_date_list(begin, _end_str, ascending=False)
         logger.debug(f"in func 'get_date_list', all_date_list length: {len(_all_date_list)}, first 5 dates: {_all_date_list[:5]}")
-        _current_df = UtilFuncs.get_tracing_by_date(pg_conn, key)
+        _current_df = DgAkUtilFuncs.get_tracing_by_date(pg_conn, key)
         logger.debug(f"in func 'get_date_list', current_df length: {len(_current_df)}, first 5 rows: {_current_df.head().to_dict(orient='records')}")
 
         if not _current_df.empty:
-            _current_date_list = _current_df['td'].apply(UtilTools.format_td10).tolist()
+            _current_date_list = _current_df['td'].apply(DgAkUtilFuncs.format_td10).tolist()
             logger.debug(f"in func 'get_date_list', current_date_list length: {len(_current_date_list)}, first 5 dates: {_current_date_list[:5]}")
         else:
             _current_date_list = []
@@ -824,11 +560,11 @@ class DgAkUtilFuncs(AkUtilTools):
             """
         if LOGGER_DEBUG:
             logger.debug(f"Prepared insert SQL for tracing date data: {_insert_sql}")
-        UtilFuncs.execute_tracing_data_insert(conn, _insert_sql, _data)
+        DgAkUtilFuncs.execute_tracing_data_insert(conn, _insert_sql, _data)
 
     @staticmethod
     def insert_tracing_date_1_param_data(conn, ak_func_name, param_name, date_values):
-        _data = UtilFuncs.prepare_tracing_data(ak_func_name, param_name, date_values)
+        _data = DgAkUtilFuncs.prepare_tracing_data(ak_func_name, param_name, date_values)
         _insert_sql = """
             INSERT INTO ak_dg_tracing_by_date_1_param (ak_func_name, param_name, param_value, last_td, create_time, update_time, host_name)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -839,7 +575,7 @@ class DgAkUtilFuncs(AkUtilTools):
             """
         if LOGGER_DEBUG:
             logger.debug(f"Prepared insert SQL for tracing date with 1 param data: {_insert_sql}")
-        UtilFuncs.execute_tracing_data_insert(conn, _insert_sql, _data)
+        DgAkUtilFuncs.execute_tracing_data_insert(conn, _insert_sql, _data)
 
     @staticmethod
     def insert_tracing_scode_date_data(conn, ak_func_name, scode_list, date):
@@ -854,41 +590,8 @@ class DgAkUtilFuncs(AkUtilTools):
             """
         if LOGGER_DEBUG:
             logger.debug(f"Prepared insert SQL for tracing s_code date data: {_insert_sql}")
-        UtilFuncs.execute_tracing_data_insert(conn, _insert_sql, _data)
+        DgAkUtilFuncs.execute_tracing_data_insert(conn, _insert_sql, _data)
     # endregion tracing data funcs
 
 			 
 															   
-
-# region test
-# df = UtilFuncs.get_data_by_td('stock_zt_pool_em', '20240402')
-# print(df.columns)
-# print(df.head(3))
-
-# from airflow.providers.postgres.hooks.postgres import PostgresHook
-# pgsql_hook = PostgresHook(postgres_conn_id=con.TXY800_PGSQL_CONN_ID)
-# pg_conn = pgsql_hook.get_conn()
-
-# UtilFuncs.insert_data_from_csv(pg_conn, '/tmp/ak_data/stock_board_concept_name_em.csv', f'ak_dg_stock_board_concept_name_em')
-
-# from airflow.providers.redis.hooks.redis import RedisHook
-# REDIS_CONN_ID = "local_redis_3"
-# redis_hook = RedisHook(redis_conn_id=REDIS_CONN_ID)
-# s_code_list = UtilFuncs.get_s_code_list(redis_hook.get_conn())
-# print(s_code_list)
-
-
-# from dg_ak.store_daily.stock.ak_dg_stock_config import stock_cols_config
-# s_df = UtilFuncs.get_s_code_data('stock_zh_a_hist', stock_cols_config['stock_zh_a_hist'], s_code='000004', period='daily', start_date='20240101', end_date='20240424', adjust="")
-# hfq_s_df = UtilFuncs.get_s_code_data('stock_zh_a_hist', stock_cols_config['stock_zh_a_hist'], s_code='000004', period='daily', start_date='20240101', end_date='20240424', adjust='hfq')
-# s_df.set_index('td', inplace=True)
-# hfq_s_df.set_index('td', inplace=True)
-# hfq_s_df = hfq_s_df.add_suffix('_hfq')
-# print(s_df.head(1))
-# print(hfq_s_df.head(1))
-# merged_df = pd.merge(s_df, hfq_s_df, left_index=True, right_index=True, how='outer')
-# print(merged_df[['o', 'o_hfq', 'c', 'c_hfq']].head())
-# print(merged_df[['o', 'o_hfq', 'c', 'c_hfq']].tail())
-
-# print(UtilFuncs.generate_dt_list('2024-04-01','2024-04-10',dt_format='%Y%m%d'))
-# endregion test
