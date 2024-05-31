@@ -7,9 +7,9 @@ import traceback
 import pandas as pd
 import akshare as ak
 from io import BytesIO
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from airflow.exceptions import AirflowException
-from typing import Optional, Union
+from typing import Optional
 
 
 from utils.utils import UtilTools

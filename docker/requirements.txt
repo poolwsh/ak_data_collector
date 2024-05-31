@@ -1,0 +1,6 @@
+akshare
+numpy
+pandas
+psycopg2
+redis
+tqdm

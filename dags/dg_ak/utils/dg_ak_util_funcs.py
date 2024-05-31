@@ -8,7 +8,6 @@ print(project_root)
 # 将项目根目录添加到sys.path中
 sys.path.append(project_root)
 
-import json
 import time
 import redis
 import socket

@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg13
+    container_name: timescaledb
+    environment:
+      POSTGRES_PASSWORD: pi=3.14159
+      TZ: Asia/Shanghai
+    volumes:
+      - /home/wsh/db/timescaledb/data:/var/lib/postgresql/data
+    ports:
+      - "25432:5432"
+    restart: always
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    environment:
+      TZ: Asia/Shanghai
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "pi=3.14159"]
+    volumes:
+      - /home/wsh/db/redis/config/redis.conf:/usr/local/etc/redis/redis.conf
+      - /home/wsh/db/redis/data:/data
+    ports:
+      - "6379:6379"
+    restart: always
+
+  airflow:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:pi=3.14159@timescaledb:5432/postgres
+      AIRFLOW__CELERY__BROKER_URL: redis://:pi=3.14159@redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://postgres:pi=3.14159@timescaledb:5432/postgres
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW__WEBSERVER__SECRET_KEY: 'YOUR_SECRET_KEY'
+      AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: 'True'
+      AIRFLOW__CORE__PARALLELISM: 32
+      AIRFLOW__CORE__DAG_CONCURRENCY: 16
+      AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: 4
+      AIRFLOW__CELERY__WORKER_CONCURRENCY: 16
+    volumes:
+      - ../dags:/opt/airflow/dags
+    depends_on:
+      - timescaledb
+      - redis
+    ports:
+      - "8080:8080"
+    restart: always
+    cpus: 3.0
+    mem_limit: 4G
+
+volumes:
+  postgres_data:

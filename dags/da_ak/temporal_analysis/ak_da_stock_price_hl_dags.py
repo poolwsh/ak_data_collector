@@ -1,11 +1,10 @@
 import os
 import sys
-import time
+import random
 from pathlib import Path
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-import subprocess
 from airflow.exceptions import AirflowException
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
@@ -62,7 +61,7 @@ def get_stock_data(s_code: str) -> pd.DataFrame:
 def clear_table(conn, table_name):
     try:
         _cursor = conn.cursor()
-        _cursor.execute(f"TRUNCATE TABLE {table_name}")
+        _cursor.execute(f"DELETE FROM {table_name}")
         conn.commit()
         logger.info(f"Table {table_name} cleared successfully.")
         _cursor.close()
@@ -70,6 +69,7 @@ def clear_table(conn, table_name):
         conn.rollback()
         logger.error(f"Failed to clear table {table_name}: {_e}")
         raise AirflowException(_e)
+
 
 def insert_or_update_data_from_csv(csv_path):
     if not os.path.exists(csv_path):
@@ -117,8 +117,9 @@ def insert_or_update_data_from_csv(csv_path):
 
 
 
-def insert_or_update_tracing_data(s_code: str, min_td: str, max_td: str, host_name: str):
+def insert_or_update_tracing_data(s_code: str, min_td: str, max_td: str):
     try:
+        host_name = os.uname().nodename
         logger.info(f'storing tracing data of s_code={s_code}, min_td={min_td}, max_td={max_td}')
         with pg_conn.cursor() as cursor:
             sql = f"""
@@ -165,7 +166,8 @@ def process_and_store_data():
     logger.info("Starting to process and store data.")
     # 获取股票列表
     s_code_name_list = dauf.get_s_code_name_list(redis_hook.get_conn())
-    all_data = []
+    if not con.LOGGER_DEBUG:
+        random.shuffle(s_code_name_list)
     
     for index, stock_code in enumerate(s_code_name_list):
         logger.info(f"Processing {index + 1}/{len(s_code_name_list)}: {stock_code}")
@@ -201,6 +203,7 @@ def process_and_store_data():
         insert_or_update_data_from_csv(csv_file_path)
         if not con.LOGGER_DEBUG:
             os.remove(csv_file_path)
+        insert_or_update_tracing_data(s_code, current_min_td, current_max_td)
 
 
 def process_stock_data_internal(s_code: str, stock_data_df: pd.DataFrame, intervals: list[int]) -> pd.DataFrame:
@@ -214,70 +217,62 @@ def process_stock_data_internal(s_code: str, stock_data_df: pd.DataFrame, interv
             logger.debug(f"Processed data for s_code {s_code}: \n{price_hl_df.head(3)}")
         return price_hl_df
 
+
 def calculate_price_hl(stock_data: pd.DataFrame, intervals: list[int]) -> pd.DataFrame:
     s_code = stock_data['s_code'][0]
     results = []
-    stock_data = stock_data[['td', 'c', 's_code']]
     
-    progress_bar = tqdm(range(len(stock_data)), desc="Calculating price HL")
+    stock_data_np = stock_data[['td', 'c', 's_code']].to_numpy()
+    dates = stock_data_np[:, 0]
+    prices = stock_data_np[:, 1].astype(float)
+    s_codes = stock_data_np[:, 2]
+
+    progress_bar = tqdm(range(len(prices)), desc="Calculating price HL")
     for i in progress_bar:
         for interval in intervals:
-            if i >= interval or i + interval < len(stock_data):
-                row = calculate_c(stock_data, i, interval)
+            if i >= interval or i + interval < len(prices):
+                row = calculate_c(prices, i, interval, s_codes[i], dates[i])
                 if row:
                     results.append(row)
-
+    
     if con.LOGGER_DEBUG:
         logger.debug(f"Calculated price HL for s_code={s_code}")
     return pd.DataFrame(results)
 
 
+def calculate_c(prices: np.ndarray, i: int, interval: int, s_code: str, date: str) -> dict:
+    historical_high = prices[i-interval:i].max() if i >= interval else None
+    historical_low = prices[i-interval:i].min() if i >= interval else None
+    distance_historical_high = i - np.argmax(prices[i-interval:i]) if historical_high is not None else None
+    distance_historical_low = i - np.argmin(prices[i-interval:i]) if historical_low is not None else None
+    change_from_historical = prices[i] - historical_high if historical_high and prices[i] >= historical_high else (prices[i] - historical_low if historical_low else None)
+    pct_chg_from_historical = change_from_historical / historical_high if historical_high and prices[i] >= historical_high else (change_from_historical / historical_low if historical_low else None)
 
-def calculate_c(stock_data: pd.DataFrame, i: int, interval: int) -> dict:
-    """计算单行数据"""
-    historical_high = float(stock_data['c'][i-interval:i].max()) if i >= interval else None
-    historical_low = float(stock_data['c'][i-interval:i].min()) if i >= interval else None
-    distance_historical_high = i - stock_data['c'][i-interval:i].idxmax() if historical_high else None
-    distance_historical_low = i - stock_data['c'][i-interval:i].idxmin() if historical_low else None
-    change_from_historical = stock_data['c'][i] - historical_high if historical_high and stock_data['c'][i] >= historical_high else (stock_data['c'][i] - historical_low if historical_low else None)
-    pct_chg_from_historical = change_from_historical / historical_high if historical_high and stock_data['c'][i] >= historical_high else (change_from_historical / historical_low if historical_low else None)
-
-    if pct_chg_from_historical is not None and np.isinf(pct_chg_from_historical):
-        logger.debug(f"Inf detected in pct_chg_from_historical. s_code: {stock_data['s_code'][i]}, td: {stock_data['td'][i]}, interval: {interval}")
-        logger.debug(f"historical_high: {historical_high}, historical_low: {historical_low}")
-        logger.debug(f"change_from_historical: {change_from_historical}, pct_chg_from_historical: {pct_chg_from_historical}")
-        logger.debug(f"stock_data segment:\n{stock_data.iloc[max(0, i-interval):i]}")
-
-    target_high = float(stock_data['c'][i:i+interval].max()) if i + interval <= len(stock_data) else None
-    target_low = float(stock_data['c'][i:i+interval].min()) if i + interval <= len(stock_data) else None
-    distance_target_high = stock_data['c'][i:i+interval].idxmax() - i if target_high else None
-    distance_target_low = stock_data['c'][i:i+interval].idxmin() - i if target_low else None
-    change_to_target = target_high - stock_data['c'][i] if target_high else (target_low - stock_data['c'][i] if target_low else None)
-    pct_chg_to_tg = change_to_target / stock_data['c'][i] if change_to_target else None
-
-    if pct_chg_to_tg is not None and np.isinf(pct_chg_to_tg):
-        logger.debug(f"Inf detected in pct_chg_to_tg. s_code: {stock_data['s_code'][i]}, td: {stock_data['td'][i]}, interval: {interval}")
-        logger.debug(f"target_high: {target_high}, target_low: {target_low}")
-        logger.debug(f"change_to_target: {change_to_target}, pct_chg_to_tg: {pct_chg_to_tg}")
-        logger.debug(f"stock_data segment:\n{stock_data.iloc[i:i+interval]}")
+    target_high = prices[i:i+interval].max() if i + interval <= len(prices) else None
+    target_low = prices[i:i+interval].min() if i + interval <= len(prices) else None
+    distance_target_high = np.argmax(prices[i:i+interval]) if target_high is not None else None
+    distance_target_low = np.argmin(prices[i:i+interval]) if target_low is not None else None
+    change_to_target = target_high - prices[i] if target_high is not None else (target_low - prices[i] if target_low is not None else None)
+    pct_chg_to_tg = change_to_target / prices[i] if change_to_target is not None else None
 
     return {
-        's_code': stock_data['s_code'][i],
-        'td': stock_data['td'][i],
+        's_code': s_code,
+        'td': date,
         'interval': interval,
-        'hs_h': round(historical_high, ROUND_N) if historical_high else NONE_RESULT,
-        'hs_l': round(historical_low, ROUND_N) if historical_low else NONE_RESULT,
+        'hs_h': round(historical_high, ROUND_N) if historical_high is not None else NONE_RESULT,
+        'hs_l': round(historical_low, ROUND_N) if historical_low is not None else NONE_RESULT,
         'd_hs_h': distance_historical_high if distance_historical_high is not None else NONE_RESULT,
         'd_hs_l': distance_historical_low if distance_historical_low is not None else NONE_RESULT,
-        'chg_from_hs': round(change_from_historical, ROUND_N) if change_from_historical else NONE_RESULT,
-        'pct_chg_from_hs': round(pct_chg_from_historical, ROUND_N) if pct_chg_from_historical else NONE_RESULT,
-        'tg_h': round(target_high, ROUND_N) if target_high else NONE_RESULT,
-        'tg_l': round(target_low, ROUND_N) if target_low else NONE_RESULT,
+        'chg_from_hs': round(change_from_historical, ROUND_N) if change_from_historical is not None else NONE_RESULT,
+        'pct_chg_from_hs': round(pct_chg_from_historical, ROUND_N) if pct_chg_from_historical is not None else NONE_RESULT,
+        'tg_h': round(target_high, ROUND_N) if target_high is not None else NONE_RESULT,
+        'tg_l': round(target_low, ROUND_N) if target_low is not None else NONE_RESULT,
         'd_tg_h': distance_target_high if distance_target_high is not None else NONE_RESULT,
         'd_tg_l': distance_target_low if distance_target_low is not None else NONE_RESULT,
-        'chg_to_tg': round(change_to_target, ROUND_N) if change_to_target else NONE_RESULT,
-        'pct_chg_to_tg': round(pct_chg_to_tg, ROUND_N) if pct_chg_to_tg else NONE_RESULT
+        'chg_to_tg': round(change_to_target, ROUND_N) if change_to_target is not None else NONE_RESULT,
+        'pct_chg_to_tg': round(pct_chg_to_tg, ROUND_N) if pct_chg_to_tg is not None else NONE_RESULT
     }
+
 
 
 def generate_dag():
@@ -291,16 +286,16 @@ def generate_dag():
         'retry_delay': timedelta(minutes=con.DEFAULT_RETRY_DELAY)
     }
 
-    dag_name = "ak_dg_price_hl"
+    dag_name = "股价高低点"
 
     dag = DAG(
         dag_name,
         default_args=default_args,
-        description=f'处理股票历史高低点数据',
+        description=f'计算股票历史高低点数据',
         start_date=days_ago(1),
-        schedule_interval='@daily',
+        schedule=dauf.generate_random_minute_schedule(hour=8),
         catchup=False,
-        tags=['akshare', 'price_hl'],
+        tags=['akshare', '个股价格', '横向'],
         max_active_runs=1,
     )
 
