@@ -2,10 +2,10 @@ import os
 import sys
 import time
 from pathlib import Path
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import psycopg2
-from sqlalchemy import create_engine
 from airflow.exceptions import AirflowException
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
@@ -65,6 +65,7 @@ def insert_data_to_db(df: pd.DataFrame, table_name: str, retries: int = 3, delay
         try:
             df = df.round(ROUND_N)
             df = df.where(pd.notnull(df), None)  # Replace NaN with None
+            logger.info(f'({attempt+1}/{retries}) storing {len(df)} price hl data...')
 
             with pg_conn.cursor() as cursor:
                 for index, row in df.iterrows():
@@ -106,6 +107,7 @@ def insert_data_to_db(df: pd.DataFrame, table_name: str, retries: int = 3, delay
 
 def insert_or_update_tracing_data(s_code: str, min_td: str, max_td: str, host_name: str):
     try:
+        logger.info(f'storing tracing data of s_code={s_code}, min_td={min_td}, max_td={max_td}')
         with pg_conn.cursor() as cursor:
             sql = f"""
                 INSERT INTO {TRACING_TABLE_NAME} (s_code, min_td, max_td, host_name)
@@ -146,7 +148,6 @@ def generate_fibonacci_intervals(n: int) -> list[int]:
     intervals = [f for f in fibs if f >= MIN_INTERVAL and f < n]
     return intervals
 
-
 def process_and_store_data():
     logger.info("Starting to process and store data.")
     # 获取股票列表
@@ -186,12 +187,10 @@ def process_and_store_data():
         else:
             logger.info(f"No data to insert for s_code {s_code}")
 
-
-
 def process_stock_data_internal(s_code: str, stock_data_df: pd.DataFrame, intervals: list[int]) -> pd.DataFrame:
     if not stock_data_df.empty:
         stock_data_df['td'] = pd.to_datetime(stock_data_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
-        logger.info(f'Starting calculate of {s_code}.')
+        logger.info(f'Starting calculation for {s_code}.')
         if con.LOGGER_DEBUG:
             logger.debug(f"\nintervals={intervals}")
         price_hl_df = calculate_price_hl(stock_data_df, intervals)
@@ -206,8 +205,7 @@ def calculate_price_hl(stock_data: pd.DataFrame, intervals: list[int]) -> pd.Dat
     
     progress_bar = tqdm(range(len(stock_data)), desc="Calculating price HL")
     for i in progress_bar:
-        progress_bar.set_description(f"({i}/{len(stock_data)}) Calculating price HL")
-        
+        # progress_bar.set_description(f"({i}/{len(stock_data)}) Calculating price HL")
         for interval in intervals:
             if i >= interval or i + interval < len(stock_data):
                 row = calculate_c(stock_data, i, interval)
@@ -218,19 +216,22 @@ def calculate_price_hl(stock_data: pd.DataFrame, intervals: list[int]) -> pd.Dat
         logger.debug(f"Calculated price HL for s_code={s_code}")
     return pd.DataFrame(results)
 
-
 def calculate_c(stock_data: pd.DataFrame, i: int, interval: int) -> dict:
     """计算单行数据"""
-    # if con.LOGGER_DEBUG:
-    #     logger.debug(f"len_df={len(stock_data)}, i={i} current_interval={interval}")
-        # logger.debug(f"stock_data in calculate_c:\n{stock_data.iloc[max(0, i-interval-5):min(len(stock_data), i+5)]}")
-
     historical_high = float(stock_data['c'][i-interval:i].max()) if i >= interval else None
     historical_low = float(stock_data['c'][i-interval:i].min()) if i >= interval else None
     distance_historical_high = i - stock_data['c'][i-interval:i].idxmax() if historical_high else None
     distance_historical_low = i - stock_data['c'][i-interval:i].idxmin() if historical_low else None
     change_from_historical = stock_data['c'][i] - historical_high if historical_high and stock_data['c'][i] >= historical_high else (stock_data['c'][i] - historical_low if historical_low else None)
     pct_chg_from_historical = change_from_historical / historical_high if historical_high and stock_data['c'][i] >= historical_high else (change_from_historical / historical_low if historical_low else None)
+
+    if pct_chg_from_historical is not None and np.isinf(pct_chg_from_historical):
+        logger.debug(f"Inf detected in pct_chg_from_historical. s_code: {stock_data['s_code'][i]}, td: {stock_data['td'][i]}, interval: {interval}")
+        logger.debug(f"historical_high: {historical_high}, historical_low: {historical_low}")
+        logger.debug(f"change_from_historical: {change_from_historical}, pct_chg_from_historical: {pct_chg_from_historical}")
+        logger.debug(f"stock_data segment:\n{stock_data.iloc[max(0, i-interval):i]}")
+
+
 
     target_high = float(stock_data['c'][i:i+interval].max()) if i + interval <= len(stock_data) else None
     target_low = float(stock_data['c'][i:i+interval].min()) if i + interval <= len(stock_data) else None
@@ -239,13 +240,12 @@ def calculate_c(stock_data: pd.DataFrame, i: int, interval: int) -> dict:
     change_to_target = target_high - stock_data['c'][i] if target_high else (target_low - stock_data['c'][i] if target_low else None)
     pct_chg_to_tg = change_to_target / stock_data['c'][i] if change_to_target else None
 
-    # if con.LOGGER_DEBUG:
-    #     logger.debug(f"historical_high={historical_high}, historical_low={historical_low}")
-    #     logger.debug(f"distance_historical_high={distance_historical_high}, distance_historical_low={distance_historical_low}")
-    #     logger.debug(f"change_from_historical={change_from_historical}, pct_chg_from_historical={pct_chg_from_historical}")
-    #     logger.debug(f"target_high={target_high}, target_low={target_low}")
-    #     logger.debug(f"distance_target_high={distance_target_high}, distance_target_low={distance_target_low}")
-    #     logger.debug(f"change_to_target={change_to_target}, pct_chg_to_tg={pct_chg_to_tg}")
+    if pct_chg_to_tg is not None and np.isinf(pct_chg_to_tg):
+        logger.debug(f"Inf detected in pct_chg_to_tg. s_code: {stock_data['s_code'][i]}, td: {stock_data['td'][i]}, interval: {interval}")
+        logger.debug(f"target_high: {target_high}, target_low: {target_low}")
+        logger.debug(f"change_to_target: {change_to_target}, pct_chg_to_tg: {pct_chg_to_tg}")
+        logger.debug(f"stock_data segment:\n{stock_data.iloc[i:i+interval]}")
+
 
     return {
         's_code': stock_data['s_code'][i],
