@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-import psycopg2
+import subprocess
 from airflow.exceptions import AirflowException
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
@@ -32,11 +32,14 @@ pgsql_hook = PostgresHook(postgres_conn_id=con.TXY800_PGSQL_CONN_ID)
 pg_conn = pgsql_hook.get_conn()
 
 # 定义常量
-PRICE_HL_TABLE_NAME = 'ak_da_stock_price_hl'
+PRICE_HL_TABLE_NAME = 'ak_da_stock_price_hl_store'
+TEMP_PRICE_HL_TABLE_NAME = 'ak_da_stock_price_hl'
 TRACING_TABLE_NAME = 'ak_da_tracing_stock_price_hl'
 MIN_INTERVAL = 3
 NONE_RESULT = 'NULL'
 ROUND_N = 5
+CSV_ROOT = '/tmp/ak_da/p_hl'
+os.makedirs(CSV_ROOT, exist_ok=True)
 
 def get_stock_data(s_code: str) -> pd.DataFrame:
     sql = f"""
@@ -55,55 +58,64 @@ def get_stock_data(s_code: str) -> pd.DataFrame:
         logger.error(f"Failed to fetch data for s_code={s_code}: {str(e)}")
         raise AirflowException(e)
 
-def insert_data_to_db(df: pd.DataFrame, table_name: str, retries: int = 3, delay: int = 5):
-    if df.empty:
-        logger.warning("No data to insert into database.")
+
+def clear_table(conn, table_name):
+    try:
+        _cursor = conn.cursor()
+        _cursor.execute(f"TRUNCATE TABLE {table_name}")
+        conn.commit()
+        logger.info(f"Table {table_name} cleared successfully.")
+        _cursor.close()
+    except Exception as _e:
+        conn.rollback()
+        logger.error(f"Failed to clear table {table_name}: {_e}")
+        raise AirflowException(_e)
+
+def insert_or_update_data_from_csv(csv_path):
+    if not os.path.exists(csv_path):
+        logger.error("CSV file does not exist.")
         return
+    try:
+        _cursor = pg_conn.cursor()
+        
+        # 清空临时表
+        clear_table(pg_conn, TEMP_PRICE_HL_TABLE_NAME)
+        
+        # 导入CSV到临时表
+        with open(csv_path, 'r') as _file:
+            _copy_sql = f"COPY {TEMP_PRICE_HL_TABLE_NAME} FROM STDIN WITH CSV HEADER DELIMITER ','"
+            _cursor.copy_expert(sql=_copy_sql, file=_file)
+        
+        # 插入或更新正式表
+        _cursor.execute(f"""
+            INSERT INTO {PRICE_HL_TABLE_NAME} 
+            SELECT * FROM {TEMP_PRICE_HL_TABLE_NAME}
+            ON CONFLICT (s_code, td, interval) DO UPDATE SET
+                hs_h = EXCLUDED.hs_h,
+                hs_l = EXCLUDED.hs_l,
+                d_hs_h = EXCLUDED.d_hs_h,
+                d_hs_l = EXCLUDED.d_hs_l,
+                chg_from_hs = EXCLUDED.chg_from_hs,
+                pct_chg_from_hs = EXCLUDED.pct_chg_from_hs,
+                tg_h = EXCLUDED.tg_h,
+                tg_l = EXCLUDED.tg_l,
+                d_tg_h = EXCLUDED.d_tg_h,
+                d_tg_l = EXCLUDED.d_tg_l,
+                chg_to_tg = EXCLUDED.chg_to_tg,
+                pct_chg_to_tg = EXCLUDED.pct_chg_to_tg
+        """)
+        
+        # 提交事务
+        pg_conn.commit()
+        logger.info(f"Data from {csv_path} successfully loaded and updated into {PRICE_HL_TABLE_NAME}.")
+        
+        _cursor.close()
+    except Exception as _e:
+        pg_conn.rollback()
+        logger.error(f"Failed to load data from CSV: {_e}")
+        raise AirflowException(_e)
 
-    attempt = 0
-    while attempt < retries:
-        try:
-            df = df.round(ROUND_N)
-            df = df.where(pd.notnull(df), None)  # Replace NaN with None
-            logger.info(f'({attempt+1}/{retries}) storing {len(df)} price hl data...')
 
-            with pg_conn.cursor() as cursor:
-                for index, row in df.iterrows():
-                    sql = f"""
-                        INSERT INTO {table_name} (s_code, td, interval, hs_h, hs_l, d_hs_h, d_hs_l, chg_from_hs, pct_chg_from_hs, tg_h, tg_l, d_tg_h, d_tg_l, chg_to_tg, pct_chg_to_tg)
-                        VALUES ('{row['s_code']}', '{row['td']}', {row['interval']}, {row['hs_h']}, {row['hs_l']}, {row['d_hs_h']}, {row['d_hs_l']}, {row['chg_from_hs']}, {row['pct_chg_from_hs']}, {row['tg_h']}, {row['tg_l']}, {row['d_tg_h']}, {row['d_tg_l']}, {row['chg_to_tg']}, {row['pct_chg_to_tg']})
-                        ON CONFLICT (s_code, td, interval) DO UPDATE SET
-                        hs_h = EXCLUDED.hs_h,
-                        hs_l = EXCLUDED.hs_l,
-                        d_hs_h = EXCLUDED.d_hs_h,
-                        d_hs_l = EXCLUDED.d_hs_l,
-                        chg_from_hs = EXCLUDED.chg_from_hs,
-                        pct_chg_from_hs = EXCLUDED.pct_chg_from_hs,
-                        tg_h = EXCLUDED.tg_h,
-                        tg_l = EXCLUDED.tg_l,
-                        d_tg_h = EXCLUDED.d_tg_h,
-                        d_tg_l = EXCLUDED.d_tg_l,
-                        chg_to_tg = EXCLUDED.chg_to_tg,
-                        pct_chg_to_tg = EXCLUDED.pct_chg_to_tg;
-                    """
-                    cursor.execute(sql)
-                pg_conn.commit()
-            logger.info(f"Data inserted into {table_name} successfully.")
-            return
-        except psycopg2.OperationalError as e:
-            attempt += 1
-            logger.error(f"Failed to insert data into {table_name}, attempt {attempt}/{retries}: {str(e)}")
-            if attempt < retries:
-                logger.info(f"Retrying in {delay} seconds...")
-                time.sleep(delay)
-            else:
-                logger.error(f"All {retries} retries failed.")
-                logger.error(f"Data that caused the error: {df.head()}")
-                raise AirflowException(e)
-        except Exception as e:
-            logger.error(f"Failed to insert data into {table_name}: {str(e)}")
-            logger.error(f"Data that caused the error: {df.head()}")
-            raise AirflowException(e)
 
 def insert_or_update_tracing_data(s_code: str, min_td: str, max_td: str, host_name: str):
     try:
@@ -148,11 +160,13 @@ def generate_fibonacci_intervals(n: int) -> list[int]:
     intervals = [f for f in fibs if f >= MIN_INTERVAL and f < n]
     return intervals
 
+
 def process_and_store_data():
     logger.info("Starting to process and store data.")
     # 获取股票列表
     s_code_name_list = dauf.get_s_code_name_list(redis_hook.get_conn())
-
+    all_data = []
+    
     for index, stock_code in enumerate(s_code_name_list):
         logger.info(f"Processing {index + 1}/{len(s_code_name_list)}: {stock_code}")
         s_code = stock_code[0]
@@ -179,13 +193,15 @@ def process_and_store_data():
         intervals = generate_fibonacci_intervals(len(stock_data_df))
         price_hl_df = process_stock_data_internal(s_code, stock_data_df, intervals)
 
-        if not price_hl_df.empty:
-            insert_data_to_db(price_hl_df, PRICE_HL_TABLE_NAME)
-            min_td, max_td = price_hl_df['td'].min(), price_hl_df['td'].max()
-            host_name = os.uname().nodename
-            insert_or_update_tracing_data(s_code, min_td, max_td, host_name)
-        else:
-            logger.info(f"No data to insert for s_code {s_code}")
+        # 将 "NULL" 替换为空字符串，以便正确处理 NULL 值
+        price_hl_df = price_hl_df.replace("NULL", "")
+        
+        csv_file_path = os.path.join(CSV_ROOT, f'{s_code}.csv')
+        price_hl_df.to_csv(csv_file_path, index=False)
+        insert_or_update_data_from_csv(csv_file_path)
+        if not con.LOGGER_DEBUG:
+            os.remove(csv_file_path)
+
 
 def process_stock_data_internal(s_code: str, stock_data_df: pd.DataFrame, intervals: list[int]) -> pd.DataFrame:
     if not stock_data_df.empty:
@@ -205,7 +221,6 @@ def calculate_price_hl(stock_data: pd.DataFrame, intervals: list[int]) -> pd.Dat
     
     progress_bar = tqdm(range(len(stock_data)), desc="Calculating price HL")
     for i in progress_bar:
-        # progress_bar.set_description(f"({i}/{len(stock_data)}) Calculating price HL")
         for interval in intervals:
             if i >= interval or i + interval < len(stock_data):
                 row = calculate_c(stock_data, i, interval)
@@ -215,6 +230,8 @@ def calculate_price_hl(stock_data: pd.DataFrame, intervals: list[int]) -> pd.Dat
     if con.LOGGER_DEBUG:
         logger.debug(f"Calculated price HL for s_code={s_code}")
     return pd.DataFrame(results)
+
+
 
 def calculate_c(stock_data: pd.DataFrame, i: int, interval: int) -> dict:
     """计算单行数据"""
@@ -231,8 +248,6 @@ def calculate_c(stock_data: pd.DataFrame, i: int, interval: int) -> dict:
         logger.debug(f"change_from_historical: {change_from_historical}, pct_chg_from_historical: {pct_chg_from_historical}")
         logger.debug(f"stock_data segment:\n{stock_data.iloc[max(0, i-interval):i]}")
 
-
-
     target_high = float(stock_data['c'][i:i+interval].max()) if i + interval <= len(stock_data) else None
     target_low = float(stock_data['c'][i:i+interval].min()) if i + interval <= len(stock_data) else None
     distance_target_high = stock_data['c'][i:i+interval].idxmax() - i if target_high else None
@@ -245,7 +260,6 @@ def calculate_c(stock_data: pd.DataFrame, i: int, interval: int) -> dict:
         logger.debug(f"target_high: {target_high}, target_low: {target_low}")
         logger.debug(f"change_to_target: {change_to_target}, pct_chg_to_tg: {pct_chg_to_tg}")
         logger.debug(f"stock_data segment:\n{stock_data.iloc[i:i+interval]}")
-
 
     return {
         's_code': stock_data['s_code'][i],
@@ -264,6 +278,7 @@ def calculate_c(stock_data: pd.DataFrame, i: int, interval: int) -> dict:
         'chg_to_tg': round(change_to_target, ROUND_N) if change_to_target else NONE_RESULT,
         'pct_chg_to_tg': round(pct_chg_to_tg, ROUND_N) if pct_chg_to_tg else NONE_RESULT
     }
+
 
 def generate_dag():
     default_args = {
