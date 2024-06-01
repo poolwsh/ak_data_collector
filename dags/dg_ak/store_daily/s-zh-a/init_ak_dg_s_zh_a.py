@@ -20,7 +20,7 @@ from dags.utils.logger import logger
 import dags.utils.config as con
 
 # 配置日志调试开关
-LOGGER_DEBUG = con.LOGGER_DEBUG
+DEBUG_MODE = con.DEBUG_MODE
 
 # 配置数据库连接
 redis_hook = RedisHook(redis_conn_id=con.REDIS_CONN_ID)
@@ -96,7 +96,7 @@ def update_tracing_data(ak_func_name: str, period: str, adjust: str, s_code: str
 
 def update_all_trade_dates(trade_dates: list[str]):
     try:
-        if LOGGER_DEBUG:
+        if DEBUG_MODE:
             logger.debug(f"Trade dates to update: {len(trade_dates)}, first 5 dates: {trade_dates[:5]}")
         trade_dates = list(set(trade_dates))  # 去重
         trade_dates.sort()  # 排序
@@ -148,7 +148,7 @@ def init_ak_dg_s_zh_a(ak_func_name: str, period: str, adjust: str):
         yesterday_date = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
 
         for index, (s_code, s_name) in enumerate(s_code_name_list):
-            if LOGGER_DEBUG and index >= 5:
+            if DEBUG_MODE and index >= 5:
                 break
             logger.info(f'({index + 1}/{total_codes}) Fetching data for s_code={s_code}, s_name={s_name}')
             if adjust == 'bfq':
@@ -170,11 +170,11 @@ def init_ak_dg_s_zh_a(ak_func_name: str, period: str, adjust: str):
                 update_tracing_data(ak_func_name, period, adjust, s_code, stock_data_df)
                 all_trade_dates.update(stock_data_df['td'].tolist())
 
-                if LOGGER_DEBUG:
+                if DEBUG_MODE:
                     logger.debug(f"Stock data for s_code={s_code}: {stock_data_df.shape[0]} rows\n{stock_data_df.head(5).to_string(index=False)}")
 
         insert_code_name_to_db(s_code_name_list)
-        if LOGGER_DEBUG:
+        if DEBUG_MODE:
             logger.debug(f"Final trade dates list length: {len(all_trade_dates)}, first 5 dates: {list(all_trade_dates)[:5]}")
         update_all_trade_dates(list(all_trade_dates))
 

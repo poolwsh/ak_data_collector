@@ -17,21 +17,18 @@ from datetime import timedelta, datetime
 from airflow.models.dag import DAG
 from airflow.exceptions import AirflowException
 from airflow.operators.python import PythonOperator
-from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.providers.redis.hooks.redis import RedisHook
 from airflow.utils.dates import days_ago
 
+from dags.utils.db import PGEngine, task_cache_conn
 from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dguf
-from utils.logger import logger
-import utils.config as con
+from dags.utils.logger import logger
+import dags.utils.config as con
 
 # 配置日志调试开关
-LOGGER_DEBUG = con.LOGGER_DEBUG
+DEBUG_MODE = con.DEBUG_MODE
 
 # 配置数据库连接
-redis_hook = RedisHook(redis_conn_id=con.REDIS_CONN_ID)
-pgsql_hook = PostgresHook(postgres_conn_id=con.TXY800_PGSQL_CONN_ID)
-pg_conn = pgsql_hook.get_conn()
+pg_conn = PGEngine.get_conn()
 
 # 配置路径
 config_path = current_path / 'ak_dg_s-zh-a_config.py'
@@ -48,7 +45,7 @@ STOCK_CODE_NAME_TABLE = 'ak_dg_stock_zh_a_code_name'
 
 # 定义昨天的日期、默认开始日期和批次大小
 default_end_date =dguf.format_td8(datetime.now()) # - timedelta(days=1)
-default_start_date = con.zh_a_default_start_date
+default_start_date = con.ZH_A_DEFAULT_START_DATE
 batch_size = 50  # 根据需求调整批次大小
 rollback_days = 15  # 回滚天数
 
@@ -79,7 +76,7 @@ def prepare_arg_list(ak_func_name: str, period: str, adjust: str):
     ]
     _tracing_dict = dict(zip(_current_tracing_df['scode'].values, _current_tracing_df['last_td'].values))
 
-    _s_code_name_list =dguf.get_s_code_name_list(redis_hook.get_conn())
+    _s_code_name_list =dguf.get_s_code_name_list(task_cache_conn)
     insert_code_name_to_db(_s_code_name_list)
     
     _arg_list = []
@@ -91,19 +88,19 @@ def prepare_arg_list(ak_func_name: str, period: str, adjust: str):
         _arg_list.append((_s_code,dguf.format_td8(_start_date), default_end_date))
 
     _redis_key = f"{ARG_LIST_CACHE_PREFIX}@{ak_func_name}@{period}@{adjust}"
-    dguf.write_list_to_redis(_redis_key, _arg_list, redis_hook.get_conn())
+    dguf.write_list_to_redis(_redis_key, _arg_list, task_cache_conn)
     logger.info(f"Argument list for {ak_func_name} with period={period} and adjust={adjust} has been prepared and cached.")
 
 def get_stock_data(ak_func_name: str, period: str, adjust: str):
     logger.info(f"Starting to save data for {ak_func_name} with period={period} and adjust={adjust}")
     try:
         _redis_key = f"{ARG_LIST_CACHE_PREFIX}@{ak_func_name}@{period}@{adjust}"
-        _arg_list = dguf.read_list_from_redis(_redis_key, redis_hook.get_conn())
+        _arg_list = dguf.read_list_from_redis(_redis_key, task_cache_conn)
 
         if not _arg_list:
             raise AirflowException(f"No arguments available for {ak_func_name}, skipping data fetch.")
 
-        if LOGGER_DEBUG:
+        if DEBUG_MODE:
             logger.debug(f"Config dictionary for {ak_func_name}: {ak_cols_config_dict}")
 
         _total_codes = len(_arg_list)
@@ -135,7 +132,7 @@ def get_stock_data(ak_func_name: str, period: str, adjust: str):
             # 如果达到批次大小，处理并清空缓存
             if len(_all_data) >= batch_size or (_index + 1) == _total_codes:
                 _combined_df = pd.concat(_all_data, ignore_index=True)
-                if LOGGER_DEBUG:
+                if DEBUG_MODE:
                     logger.debug(f"Combined DataFrame columns for {ak_func_name}: {_combined_df.columns}")
 
                 _combined_df['s_code'] = _combined_df['s_code'].astype(str)
@@ -178,7 +175,7 @@ def store_stock_data(ak_func_name: str, period: str, adjust: str):
         source_table = f'ak_dg_{ak_func_name}_{period}_{adjust}'
         store_table = f'ak_dg_{ak_func_name}_store_{period}_{adjust}'
         # Dynamically retrieve the column names from the table
-        columns =dguf.get_columns_from_table(pg_conn, source_table, redis_hook.get_conn())
+        columns =dguf.get_columns_from_table(pg_conn, source_table, task_cache_conn)
         column_names = [col[0] for col in columns]  # Extract only the column names
         columns_str = ', '.join(column_names)
         update_columns = ', '.join([f"{col} = EXCLUDED.{col}" for col in column_names if col not in ['s_code', 'td']])
@@ -192,7 +189,7 @@ def store_stock_data(ak_func_name: str, period: str, adjust: str):
         """
 
         _inserted_rows =dguf.store_ak_data(pg_conn, ak_func_name, _insert_sql, truncate=False)
-        if LOGGER_DEBUG:
+        if DEBUG_MODE:
             logger.debug(f"Inserted rows for {ak_func_name}: {_inserted_rows}")
 
         # Extract the maximum td for each s_code
@@ -202,14 +199,14 @@ def store_stock_data(ak_func_name: str, period: str, adjust: str):
             if s_code not in _keys or td > _keys[s_code]:
                 _keys[s_code] = td
 
-        if LOGGER_DEBUG:
+        if DEBUG_MODE:
             logger.debug(f"Keys to store in Redis for {ak_func_name}: {_keys}")
 
         # Convert the date objects to string format
         _keys_str = {k: v.strftime('%Y-%m-%d') for k, v in _keys.items()}
 
         _redis_key = f"{STORE_LIST_CACHE_PREFIX}@{ak_func_name}@{period}@{adjust}"
-        dguf.write_list_to_redis(_redis_key, list(_keys_str.items()), redis_hook.get_conn())
+        dguf.write_list_to_redis(_redis_key, list(_keys_str.items()), task_cache_conn)
         logger.info(f"Data operation completed successfully for {ak_func_name}. Keys: {_keys}")
 
     except Exception as e:
@@ -219,7 +216,7 @@ def store_stock_data(ak_func_name: str, period: str, adjust: str):
 
 def update_tracing_date(ak_func_name: str, period: str, adjust: str):
     _redis_key = f"{STORE_LIST_CACHE_PREFIX}@{ak_func_name}@{period}@{adjust}"
-    _stored_keys =dguf.read_list_from_redis(_redis_key, redis_hook.get_conn())
+    _stored_keys =dguf.read_list_from_redis(_redis_key, task_cache_conn)
     if not _stored_keys:
         logger.info(f"No keys to process for {ak_func_name}")
         return

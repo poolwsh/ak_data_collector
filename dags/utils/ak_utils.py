@@ -19,18 +19,18 @@ from utils.logger import logger
 
 
 # Logger debug switch
-LOGGER_DEBUG = con.LOGGER_DEBUG
+DEBUG_MODE = con.DEBUG_MODE
 
 class AkUtilTools(UtilTools):
     
     @staticmethod
     def get_s_code_list(redis_conn: redis.Redis, ttl: int = con.DEFAULT_REDIS_TTL):
-        if LOGGER_DEBUG:
+        if DEBUG_MODE:
             logger.debug("Attempting to get stock codes list from Redis.")
         try:
             _df = AkUtilTools.read_df_from_redis(con.STOCK_A_REALTIME_KEY, redis_conn)
             logger.info('Read stock real-time data from Redis successfully.')
-            if LOGGER_DEBUG:
+            if DEBUG_MODE:
                 logger.debug(f"Stock codes list length: {len(_df['s_code'])}, first 5 codes: {_df['s_code'].tolist()[:5]}")
             return _df['s_code']
         except Exception as _e:
@@ -41,7 +41,7 @@ class AkUtilTools(UtilTools):
                     _df.rename(columns={'代码': 's_code'}, inplace=True)
                     _df['s_code'] = _df['s_code'].astype(str)
                     AkUtilTools.write_df_to_redis(con.STOCK_A_REALTIME_KEY, _df, redis_conn, ttl)
-                    if LOGGER_DEBUG:
+                    if DEBUG_MODE:
                         logger.debug(f"Fetched and cached stock codes list length: {len(_df['s_code'])}, first 5 codes: {_df['s_code'].tolist()[:5]}")
                     return _df['s_code']
                 else:
@@ -53,13 +53,13 @@ class AkUtilTools(UtilTools):
 
     @staticmethod
     def get_s_code_name_list(redis_conn: redis.Redis, ttl: int = 60 * 60):
-        if LOGGER_DEBUG:
+        if DEBUG_MODE:
             logger.debug("Attempting to get stock codes and names list from Redis.")
         try:
             _df = AkUtilTools.read_df_from_redis(con.STOCK_A_REALTIME_KEY, redis_conn)
             if _df is not None:
                 logger.info('Read stock real-time data from Redis successfully.')
-                if LOGGER_DEBUG:
+                if DEBUG_MODE:
                     logger.debug(f"Stock codes and names list length: {len(_df)}, first 5: {_df[['s_code', 's_name']].values.tolist()[:5]}")
                 return _df[['s_code', 's_name']].values.tolist()
             else:
@@ -74,7 +74,7 @@ class AkUtilTools(UtilTools):
                 _df.rename(columns={'代码': 's_code', '名称': 's_name'}, inplace=True)
                 _df['s_code'] = _df['s_code'].astype(str)
                 AkUtilTools.write_df_to_redis(con.STOCK_A_REALTIME_KEY, _df, redis_conn, ttl)
-                if LOGGER_DEBUG:
+                if DEBUG_MODE:
                     logger.debug(f"Fetched and cached stock codes and names list length: {len(_df)}, first 5: {_df[['s_code', 's_name']].values.tolist()[:5]}")
                 return _df[['s_code', 's_name']].values.tolist()
             else:
@@ -95,7 +95,7 @@ class AkUtilTools(UtilTools):
             _file_path = os.path.join(dir_path, f"{filename}.csv")
             df.to_csv(_file_path, index=False, header=include_header)
             logger.info(f"Data saved to CSV at {_file_path}")
-            if LOGGER_DEBUG:
+            if DEBUG_MODE:
                 logger.debug(f"CSV data length: {len(df)}, first 5 rows: {df.head().to_dict(orient='records')}")
             return _file_path
         except Exception as _e:
@@ -123,7 +123,7 @@ class AkUtilTools(UtilTools):
     @staticmethod
     def get_columns_from_table(pg_conn, table_name, redis_conn: redis.Redis, ttl: int = con.DEFAULT_REDIS_TTL):
         _redis_key = f"columns_{table_name}"
-        if LOGGER_DEBUG:
+        if DEBUG_MODE:
             logger.debug(f"Fetching column names and types for table: {table_name}")
 
         try:
@@ -131,7 +131,7 @@ class AkUtilTools(UtilTools):
             if _cached_columns:
                 _columns = json.loads(_cached_columns)
                 logger.info(f"Retrieved column names and types for table '{table_name}' from Redis.")
-                if LOGGER_DEBUG:
+                if DEBUG_MODE:
                     logger.debug(f"Cached columns length: {len(_columns)}, first 5 columns: {_columns[:5]}")
                 return _columns
         except Exception as _e:
@@ -153,7 +153,7 @@ class AkUtilTools(UtilTools):
             try:
                 redis_conn.setex(_redis_key, ttl, json.dumps(_columns))
                 logger.info(f"Retrieved column names and types for table '{table_name}' from PostgreSQL and cached in Redis.")
-                if LOGGER_DEBUG:
+                if DEBUG_MODE:
                     logger.debug(f"Columns for table {table_name} length: {len(_columns)}, first 5 columns: {_columns[:5]}")
             except Exception as _e:
                 logger.warning(f"Failed to cache column names and types in Redis for table '{table_name}': {_e}")
@@ -167,7 +167,7 @@ class AkUtilTools(UtilTools):
     @staticmethod
     def convert_columns(df, table_name, pg_conn, redis_conn: redis.Redis):
         _columns = AkUtilTools.get_columns_from_table(pg_conn, table_name, redis_conn)
-        if LOGGER_DEBUG:
+        if DEBUG_MODE:
             logger.debug(f"Columns for table {table_name}: {_columns}")
         if _columns is None or len(_columns) < 1:
             raise AirflowException(f"Can't find columns using table_name {table_name}")
@@ -176,7 +176,7 @@ class AkUtilTools(UtilTools):
         column_names = [col[0] for col in _columns]
         column_types = {col[0]: col[1] for col in _columns}
 
-        if con.LOGGER_DEBUG:
+        if DEBUG_MODE:
             logger.debug('column_names')
             logger.debug(column_names)
         # 根据列名对 DataFrame 进行筛选
@@ -211,7 +211,7 @@ class AkUtilTools(UtilTools):
             if _data_json:
                 _df = pd.read_json(BytesIO(_data_json), dtype=str)
                 logger.info(f"DataFrame retrieved from Redis for key: {key}")
-                if LOGGER_DEBUG:
+                if DEBUG_MODE:
                     logger.debug(f"DataFrame length: {len(_df)}, first 5 rows: {_df.head().to_dict(orient='records')}")
                 return _df
             else:
@@ -227,7 +227,7 @@ class AkUtilTools(UtilTools):
             _data_json = df.to_json(date_format='iso')
             conn.setex(key, ttl, _data_json)
             logger.info(f"DataFrame written to Redis under key: {key} with TTL {ttl} seconds.")
-            if LOGGER_DEBUG:
+            if DEBUG_MODE:
                 logger.debug(f"DataFrame length: {len(df)}, first 5 rows: {df.head().to_dict(orient='records')}")
         except Exception as _e:
             _error_msg = f"Error writing DataFrame to Redis for key: {key}. Traceback: {traceback.format_exc()}"
@@ -242,7 +242,7 @@ class AkUtilTools(UtilTools):
             _data_json = json.dumps(_data_list)
             conn.setex(key, ttl, _data_json)
             logger.info(f"List written to Redis under key: {key} with TTL {ttl} seconds.")
-            if LOGGER_DEBUG:
+            if DEBUG_MODE:
                 logger.debug(f"List length: {len(_data_list)}, first 5 items: {_data_list[:5]}")
         except Exception as _e:
             logger.error(f"Error writing list to Redis: {str(_e)}")
@@ -256,7 +256,7 @@ class AkUtilTools(UtilTools):
                 _data_list = json.loads(_data_json)
                 _data_list = [datetime.strptime(item, '%Y-%m-%d').date() if len(item) == 10 else item for item in _data_list]
                 logger.info(f"List retrieved from Redis for key: {key}")
-                if LOGGER_DEBUG:
+                if DEBUG_MODE:
                     logger.debug(f"List length: {len(_data_list)}, first 5 items: {_data_list[:5]}")
                 return _data_list
             else:

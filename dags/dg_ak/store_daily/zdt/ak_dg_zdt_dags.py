@@ -14,23 +14,20 @@ import socket
 import pandas as pd
 from datetime import datetime, timedelta
 from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dguf
-from utils.logger import logger
-import utils.config as con
+from dags.utils.db import PGEngine, task_cache_conn
+from dags.utils.logger import logger
+import dags.utils.config as con
 
 from airflow.exceptions import AirflowException
 from airflow.models.dag import DAG
 from airflow.operators.python import PythonOperator
-from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.providers.redis.hooks.redis import RedisHook
 from airflow.utils.dates import days_ago
 
 # 配置日志调试开关
-LOGGER_DEBUG = con.LOGGER_DEBUG
+DEBUG_MODE = con.DEBUG_MODE
 
 # 配置数据库连接
-redis_hook = RedisHook(redis_conn_id=con.REDIS_CONN_ID)
-pgsql_hook = PostgresHook(postgres_conn_id=con.TXY800_PGSQL_CONN_ID)
-pg_conn = pgsql_hook.get_conn()
+pg_conn = PGEngine.get_conn()
 
 config_path = current_path / 'ak_dg_zdt_config.py'
 sys.path.append(config_path.parent.as_posix())
@@ -39,7 +36,6 @@ ak_cols_config_dict = dguf.load_ak_cols_config(config_path.as_posix())
 # 统一定义Redis keys
 ZDT_DATE_LIST_KEY_PREFIX = "zdt_date_list"
 STORED_KEYS_KEY_PREFIX = "stored_keys"
-
 TRACING_TABLE_NAME = 'ak_dg_tracing_by_date'
 
 default_trade_dates = 50
@@ -51,7 +47,7 @@ def get_tracing_data(ak_func_name: str):
     try:
         td_list = dguf.get_trade_dates(pg_conn)
         td_list.sort(reverse=True)
-        if LOGGER_DEBUG:
+        if DEBUG_MODE:
             logger.debug(f'length of reversed td list from trade date table {len(td_list)}')
             logger.debug(f'first 5:{td_list[:5]}')
         
@@ -60,22 +56,22 @@ def get_tracing_data(ak_func_name: str):
         result = cursor.fetchone()
         if result:
             last_td = result[0]
-            if LOGGER_DEBUG:
+            if DEBUG_MODE:
                 logger.debug(f"Last trading date for {ak_func_name}: {last_td}")
             start_index = td_list.index(last_td) if last_td in td_list else 0
             selected_dates = td_list[:start_index + rollback_days + 1]
         else:
             selected_dates = td_list[:default_trade_dates]
         
-        if LOGGER_DEBUG:
+        if DEBUG_MODE:
             logger.debug(f'length of selected_dates {len(selected_dates)}')
             logger.debug(f'selected_dates:{selected_dates}')
         cursor.close()
         
         date_df = pd.DataFrame(selected_dates, columns=['td'])
         redis_key = f'{ZDT_DATE_LIST_KEY_PREFIX}_{ak_func_name}'
-        dguf.write_df_to_redis(redis_key, date_df, redis_hook.get_conn(), con.DEFAULT_REDIS_TTL)
-        if LOGGER_DEBUG:
+        dguf.write_df_to_redis(redis_key, date_df, task_cache_conn, con.DEFAULT_REDIS_TTL)
+        if DEBUG_MODE:
             logger.debug(f"Tracing dataframe for {ak_func_name} written to Redis with key: {redis_key}")
     except Exception as e:
         logger.error(f"Failed to get tracing dataframe for {ak_func_name}: {str(e)}")
@@ -86,7 +82,7 @@ def get_zdt_data(ak_func_name):
     try:
         redis_key = f'{ZDT_DATE_LIST_KEY_PREFIX}_{ak_func_name}'
         temp_csv_path = dguf.get_data_and_save2csv(redis_key, ak_func_name, ak_cols_config_dict, pg_conn, redis_hook.get_conn())
-        if LOGGER_DEBUG:
+        if DEBUG_MODE:
             logger.debug(f"Data for {ak_func_name} saved to CSV at {temp_csv_path}")
 
         # 清空表内容
@@ -105,7 +101,7 @@ def get_zdt_data(ak_func_name):
             logger.info(f"{temp_csv_path} has been removed.")
     except ValueError as ve:
         if ("只能获取最近 30 个交易日的数据" in str(ve)) or ("Length mismatch" in str(ve)):
-            logger.warning(f"Error fetching data for date {date}: {ve}")
+            logger.warning(f"{ak_func_name}只能获取最近 30 个交易日的数据")
         else:
             raise ve
     except KeyError as e:
@@ -126,7 +122,7 @@ def store_zdt_data(ak_func_name: str):
         source_table = f'ak_dg_{ak_func_name}'
         store_table = f'ak_dg_{ak_func_name}_store'
         # 动态获取表的列名        
-        columns = dguf.get_columns_from_table(pg_conn, source_table, redis_hook.get_conn())
+        columns = dguf.get_columns_from_table(pg_conn, source_table, task_cache_conn)
         column_names = [col[0] for col in columns]  # Extract column names
         columns_str = ', '.join(column_names)
         update_columns = ', '.join([f"{col} = EXCLUDED.{col}" for col in column_names if col not in ['td', 's_code']])
@@ -144,11 +140,11 @@ def store_zdt_data(ak_func_name: str):
         if inserted_rows:
             max_td = max(row[0] for row in inserted_rows)
 
-            if LOGGER_DEBUG:
+            if DEBUG_MODE:
                 logger.debug(f"Max td to store in Redis for {ak_func_name}: {max_td}")
 
             redis_key = f"{STORED_KEYS_KEY_PREFIX}@{ak_func_name}"
-            dguf.write_list_to_redis(redis_key, [max_td.strftime('%Y-%m-%d')], redis_hook.get_conn())
+            dguf.write_list_to_redis(redis_key, [max_td.strftime('%Y-%m-%d')], task_cache_conn)
             logger.info(f"Data operation completed successfully for {ak_func_name}. Max td: {max_td}")
         else:
             logger.warning(f"No rows inserted for {ak_func_name}, skipping Redis update.")
@@ -161,8 +157,8 @@ def update_tracing_data(ak_func_name):
     logger.info(f"Preparing to insert tracing data for {ak_func_name}")
     try:
         redis_key = f"{STORED_KEYS_KEY_PREFIX}@{ak_func_name}"
-        date_list = dguf.read_list_from_redis(redis_key, redis_hook.get_conn())
-        if LOGGER_DEBUG:
+        date_list = dguf.read_list_from_redis(redis_key, task_cache_conn)
+        if DEBUG_MODE:
             logger.debug(f"Date list from Redis: {date_list}")
 
         host_name = os.getenv('HOSTNAME', socket.gethostname())

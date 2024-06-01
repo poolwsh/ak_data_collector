@@ -2,6 +2,7 @@
 import os
 import threading
 import logging
+import dags.utils.config as con
 from logging.handlers import RotatingFileHandler
 
 # 实现 singleton 装饰器
@@ -13,7 +14,7 @@ def singleton(cls, *args, **kw):
         return instances[cls]
     return _singleton
 
-log_root_dir = '/data/workspace/log/default'
+log_root_dir = con.LOG_ROOT
 
 if not os.path.exists(log_root_dir):
     os.makedirs(log_root_dir)

@@ -16,7 +16,7 @@ from utils.logger import logger
 from airflow.exceptions import AirflowException
 
 # Logger debug switch
-LOGGER_DEBUG = con.LOGGER_DEBUG
+DEBUG_MODE = con.DEBUG_MODE
 
 
 class DaAkUtilFuncs(AkUtilTools):

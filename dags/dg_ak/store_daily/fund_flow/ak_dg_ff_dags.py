@@ -18,26 +18,25 @@ from pathlib import Path
 from datetime import timedelta, datetime, date
 from airflow.models.dag import DAG
 from airflow.operators.python import PythonOperator, BranchPythonOperator
-from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.providers.redis.hooks.redis import RedisHook
 from airflow.operators.dummy import DummyOperator
 from airflow.utils.dates import days_ago
 from airflow.exceptions import AirflowException
 
 from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dguf
-from utils.logger import logger
-import utils.config as con
+from dags.utils.db import PGEngine, task_cache_conn
+from dags.utils.logger import logger
+import dags.utils.config as con
+
+DEBUG_MODE = con.DEBUG_MODE
 
 # 配置 today 变量
-if con.LOGGER_DEBUG:
+if DEBUG_MODE:
     today = '2024-05-24'
 else:
     today = datetime.now().strftime('%Y-%m-%d')
 
 # 配置数据库连接
-redis_hook = RedisHook(redis_conn_id=con.REDIS_CONN_ID)
-pgsql_hook = PostgresHook(postgres_conn_id=con.TXY800_PGSQL_CONN_ID)
-pg_conn = pgsql_hook.get_conn()
+pg_conn = PGEngine.get_conn()
 
 # 配置路径
 config_path = Path(__file__).resolve().parent / 'ak_dg_ff_config.py'
@@ -79,7 +78,7 @@ def is_trading_day(**kwargs) -> str:
     today_date = datetime.strptime(today, '%Y-%m-%d').date()
     trade_dates =dguf.get_trade_dates(pg_conn)
     trade_dates.sort(reverse=True)
-    if con.LOGGER_DEBUG:
+    if DEBUG_MODE:
         logger.debug(f'today: {today_date}')
         logger.debug(f'first 5 trade_dates: {trade_dates[:5]}')
     if today_date in trade_dates:
@@ -92,18 +91,18 @@ def process_data_columns(data, func_name, s_code=None, b_name=None):
     """
     Remove unnecessary columns, rename columns, and add stock or board name if provided.
     """
-    if con.LOGGER_DEBUG:
+    if DEBUG_MODE:
         logger.debug(f"Removing unnecessary columns for {func_name}")
 
     cols_config = ak_cols_config_dict[func_name]
     remove_list = cols_config.get("remove_list", [])
     for col in remove_list:
         if col in data.columns:
-            if con.LOGGER_DEBUG:
+            if DEBUG_MODE:
                 logger.debug(f"Removing column: {col}")
             data.drop(columns=[col], inplace=True)
         else:
-            if con.LOGGER_DEBUG:
+            if DEBUG_MODE:
                 logger.debug(f"Column {col} not found in data, skipping removal.")
 
     data.rename(columns=dguf.get_col_dict(cols_config), inplace=True)
@@ -149,7 +148,7 @@ def fetch_and_process_data(func_name, ak_func, table_name, params=None, param_ke
             logger.warning(f"No data found for {func_name}")
             return
 
-        if con.LOGGER_DEBUG:
+        if DEBUG_MODE:
             logger.debug(f"Data fetched for {func_name}: {data.head()}")
 
         data = process_data_columns(data, func_name, b_name=b_name)
@@ -199,12 +198,12 @@ def get_b_names_from_table(pg_conn, table_name: str, td=today) -> list:
 
 def get_data_by_s_code(func_name, cols_config):
     logger.info("Fetching stock individual fund flow data")
-    s_code_list =dguf.get_s_code_list(redis_hook.get_conn())
+    s_code_list =dguf.get_s_code_list(task_cache_conn)
     all_data = []
     _len_s_code_list = len(s_code_list)
     for _index, _s_code in enumerate(s_code_list, start=1):
         try:
-            # if con.LOGGER_DEBUG and _index > 5:
+            # if DEBUG_MODE and _index > 5:
             #     break
             logger.info(f'({_index}/{_len_s_code_list}) downloading data with s_code={_s_code}')
             logger.info(f"Fetching data for s_code: {_s_code} using function {func_name}")
@@ -231,11 +230,11 @@ def get_data_by_s_code(func_name, cols_config):
                 data['td'] = data['td'].apply(dguf.format_td10)
 
             # 转换列顺序和数据类型
-            data =dguf.convert_columns(data, f'ak_dg_{func_name}_store', pg_conn, redis_hook.get_conn())
+            data =dguf.convert_columns(data, f'ak_dg_{func_name}_store', pg_conn, task_cache_conn)
 
             all_data.append(data)
 
-            if con.LOGGER_DEBUG:
+            if DEBUG_MODE:
                 logger.debug(f"Fetched data for s_code {_s_code}: {data.head()}")
         except Exception as e:
             logger.error(f"Failed to fetch data for s_code {_s_code} using function {func_name}: {str(e)}")
@@ -279,7 +278,7 @@ def get_stock_sector_fund_flow_rank():
             all_data.append(data)
     if all_data:
         combined_data = pd.concat(all_data, ignore_index=True)
-        if con.LOGGER_DEBUG:
+        if con.DEBUG_MODE:
             logger.debug(f'combined_data in {func_name}:')
             logger.debug(combined_data.head(5))
         fetch_and_process_data(func_name, lambda: combined_data, f'ak_dg_{func_name}_store')

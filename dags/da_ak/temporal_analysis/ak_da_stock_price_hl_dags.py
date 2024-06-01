@@ -10,8 +10,6 @@ from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.utils.dates import days_ago
 from datetime import timedelta
-from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.providers.redis.hooks.redis import RedisHook
 
 # 动态添加项目根目录到Python路径
 current_path = Path(__file__).resolve().parent 
@@ -19,16 +17,16 @@ project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..'))
 sys.path.append(project_root)
 
 from dags.da_ak.utils.da_ak_util_funcs import DaAkUtilFuncs as dauf
-from utils.logger import logger
-import utils.config as con
+from dags.utils.db import PGEngine, task_cache_conn
+from dags.utils.logger import logger
+import dags.utils.config as con
 
 # 配置日志调试开关
-LOGGER_DEBUG = con.LOGGER_DEBUG
+DEBUG_MODE = con.DEBUG_MODE
 
 # 配置数据库连接
-redis_hook = RedisHook(redis_conn_id=con.REDIS_CONN_ID)
-pgsql_hook = PostgresHook(postgres_conn_id=con.TXY800_PGSQL_CONN_ID)
-pg_conn = pgsql_hook.get_conn()
+pg_conn = PGEngine.get_conn()
+
 
 # 定义常量
 PRICE_HL_TABLE_NAME = 'ak_da_stock_price_hl_store'
@@ -165,8 +163,8 @@ def generate_fibonacci_intervals(n: int) -> list[int]:
 def process_and_store_data():
     logger.info("Starting to process and store data.")
     # 获取股票列表
-    s_code_name_list = dauf.get_s_code_name_list(redis_hook.get_conn())
-    if not con.LOGGER_DEBUG:
+    s_code_name_list = dauf.get_s_code_name_list(task_cache_conn)
+    if not DEBUG_MODE:
         random.shuffle(s_code_name_list)
     
     for index, stock_code in enumerate(s_code_name_list):
@@ -201,7 +199,7 @@ def process_and_store_data():
         csv_file_path = os.path.join(CSV_ROOT, f'{s_code}.csv')
         price_hl_df.to_csv(csv_file_path, index=False)
         insert_or_update_data_from_csv(csv_file_path)
-        if not con.LOGGER_DEBUG:
+        if not DEBUG_MODE:
             os.remove(csv_file_path)
         insert_or_update_tracing_data(s_code, current_min_td, current_max_td)
 
@@ -210,10 +208,10 @@ def process_stock_data_internal(s_code: str, stock_data_df: pd.DataFrame, interv
     if not stock_data_df.empty:
         stock_data_df['td'] = pd.to_datetime(stock_data_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
         logger.info(f'Starting calculation for {s_code}.')
-        if con.LOGGER_DEBUG:
+        if DEBUG_MODE:
             logger.debug(f"\nintervals={intervals}")
         price_hl_df = calculate_price_hl(stock_data_df, intervals)
-        if LOGGER_DEBUG:
+        if DEBUG_MODE:
             logger.debug(f"Processed data for s_code {s_code}: \n{price_hl_df.head(3)}")
         return price_hl_df
 
@@ -235,7 +233,7 @@ def calculate_price_hl(stock_data: pd.DataFrame, intervals: list[int]) -> pd.Dat
                 if row:
                     results.append(row)
     
-    if con.LOGGER_DEBUG:
+    if DEBUG_MODE:
         logger.debug(f"Calculated price HL for s_code={s_code}")
     return pd.DataFrame(results)
 
