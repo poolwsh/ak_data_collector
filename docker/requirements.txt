@@ -1,6 +1,6 @@
 akshare
 numpy
 pandas
-psycopg2
+psycopg2-binary
 redis
 tqdm

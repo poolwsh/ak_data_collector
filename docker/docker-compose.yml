@@ -50,8 +50,11 @@ services:
     ports:
       - "8080:8080"
     restart: always
-    cpus: 3.0
-    mem_limit: 4G
+    deploy:
+      resources:
+        limits:
+          cpus: '3.0'
+          memory: 4G
 
 volumes:
   postgres_data:
