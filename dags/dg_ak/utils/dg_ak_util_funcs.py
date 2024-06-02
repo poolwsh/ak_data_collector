@@ -230,8 +230,8 @@ class DgAkUtilFuncs(AkUtilTools):
         return None
 
     @staticmethod
-    def get_data_today(ak_func_name: str, ak_cols_config_dict: dict, date_format: str = '%Y-%m-%d') -> pd.DataFrame:
-        _today_date = datetime.now().strftime(date_format)  # Get today's date in the specified format
+    def get_data_today(ak_func_name: str, ak_cols_config_dict: dict, date=datetime.now(), date_format: str = '%Y-%m-%d') -> pd.DataFrame:
+        _today_date = date.strftime(date_format)  # Get today's date in the specified format
         _ak_func = getattr(ak, ak_func_name, None)
 
         if _ak_func is None:

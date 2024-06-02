@@ -9,9 +9,11 @@ import pandas as pd
 from airflow.exceptions import AirflowException
 
 # 动态添加项目根目录到Python路径
-current_dir = Path(__file__).resolve().parent
-project_root = current_dir.parent.parent.parent.parent
+current_path = Path(__file__).resolve().parent 
+project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..', '..'))
+print(f'project_root={project_root}')
 sys.path.append(str(project_root))
+
 
 from dags.utils.db import PGEngine, task_cache_conn
 from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dguf
@@ -23,6 +25,7 @@ DEBUG_MODE = con.DEBUG_MODE
 
 # 配置数据库连接
 pg_conn = PGEngine.get_conn()
+raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
 
 # 定义常量
 TRACING_TABLE_NAME = 'ak_dg_tracing_s_zh_a'
@@ -35,20 +38,20 @@ def read_and_execute_sql(file_path: str):
     try:
         with open(file_path, 'r') as file:
             sql_statements = file.read()
-        cursor = pg_conn.cursor()
+        cursor = raw_conn.cursor()
         cursor.execute(sql_statements)
-        pg_conn.commit()
+        raw_conn.commit()
         cursor.close()
         logger.info("SQL statements executed successfully.")
     except Exception as e:
         logger.error(f"Failed to execute SQL statements: {str(e)}")
-        pg_conn.rollback()
+        raw_conn.rollback()
         raise AirflowException(e)
 
 def insert_data_to_db(df: pd.DataFrame, table_name: str, batch_size: int = 5000):
     """将数据批量插入数据库"""
     try:
-        cursor = pg_conn.cursor()
+        cursor = raw_conn.cursor()
         columns = ', '.join(df.columns)
         placeholders = ', '.join(['%s'] * len(df.columns))
         sql = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
@@ -59,12 +62,12 @@ def insert_data_to_db(df: pd.DataFrame, table_name: str, batch_size: int = 5000)
             batch = data_tuples[i:i + batch_size]
             cursor.executemany(sql, batch)
         
-        pg_conn.commit()
+        raw_conn.commit()
         cursor.close()
         logger.info(f"Data inserted into {table_name} successfully.")
     except Exception as e:
         logger.error(f"Failed to insert data into {table_name}: {str(e)}")
-        pg_conn.rollback()
+        raw_conn.rollback()
         raise AirflowException(e)
 
 def update_tracing_data(ak_func_name: str, period: str, adjust: str, s_code: str, stock_data_df: pd.DataFrame):
@@ -81,14 +84,14 @@ def update_tracing_data(ak_func_name: str, period: str, adjust: str, s_code: str
             ON CONFLICT (ak_func_name, scode, period, adjust) DO UPDATE 
             SET last_td = EXCLUDED.last_td, update_time = EXCLUDED.update_time;
         """
-        cursor = pg_conn.cursor()
+        cursor = raw_conn.cursor()
         cursor.execute(insert_sql, date_value)
-        pg_conn.commit()
+        raw_conn.commit()
         cursor.close()
         logger.info(f"Tracing data updated for s_code={s_code} with last_td={last_td}")
     except Exception as e:
         logger.error(f"Failed to update tracing data for s_code={s_code}: {str(e)}")
-        pg_conn.rollback()
+        raw_conn.rollback()
         raise AirflowException(e)
 
 def update_all_trade_dates(trade_dates: list[str]):
@@ -102,19 +105,19 @@ def update_all_trade_dates(trade_dates: list[str]):
             VALUES (%s, NOW(), NOW())
             ON CONFLICT (trade_date) DO NOTHING;
         """
-        cursor = pg_conn.cursor()
+        cursor = raw_conn.cursor()
         cursor.executemany(insert_date_sql, [(date,) for date in trade_dates])
-        pg_conn.commit()
+        raw_conn.commit()
         cursor.close()
         logger.info("All trade dates updated successfully.")
     except Exception as e:
         logger.error(f"Failed to update trade dates: {str(e)}")
-        pg_conn.rollback()
+        raw_conn.rollback()
         raise AirflowException(e)
 
 def insert_code_name_to_db(code_name_list: list[tuple[str, str]]):
     try:
-        cursor = pg_conn.cursor()
+        cursor = raw_conn.cursor()
 
         sql = f"""
             INSERT INTO {STOCK_CODE_NAME_TABLE} (s_code, s_name, create_time, update_time)
@@ -123,12 +126,12 @@ def insert_code_name_to_db(code_name_list: list[tuple[str, str]]):
             SET s_name = EXCLUDED.s_name, update_time = EXCLUDED.update_time;
         """
         cursor.executemany(sql, code_name_list)
-        pg_conn.commit()
+        raw_conn.commit()
         cursor.close()
         logger.info(f"s_code and s_name inserted into {STOCK_CODE_NAME_TABLE} successfully.")
     except Exception as e:
         logger.error(f"Failed to insert s_code and s_name into {STOCK_CODE_NAME_TABLE}: {str(e)}")
-        pg_conn.rollback()
+        raw_conn.rollback()
         raise AirflowException(e)
 
 def init_ak_dg_s_zh_a(ak_func_name: str, period: str, adjust: str):
@@ -177,13 +180,13 @@ def init_ak_dg_s_zh_a(ak_func_name: str, period: str, adjust: str):
 
     except Exception as e:
         logger.error(f"Failed to initialize data for {ak_func_name}: {str(e)}")
-        pg_conn.rollback()
+        raw_conn.rollback()
         raise AirflowException(e)
 
 if __name__ == "__main__":
     current_dir = Path(__file__).resolve().parent
     sql_file_path = current_dir / 'create_s-zh-a_tables.sql'
-    read_and_execute_sql(sql_file_path)
+    # read_and_execute_sql(sql_file_path)
 
     ak_func_name = 'stock_zh_a_hist'
     period = 'daily'

@@ -20,7 +20,7 @@ DEFAULT_EMAIL = "wshmxgz@gmail.com"
 DEFAULT_OWNER = "wsh"
 DEFAULT_RETRY_DELAY = 30  # in minutes
 
-DEBUG_MODE = False
+DEBUG_MODE = True
 
 ZH_A_DEFAULT_START_DATE = "1980-01-01"
 DEFAULT_REDIS_TTL = 60 * 60  # 1 hour

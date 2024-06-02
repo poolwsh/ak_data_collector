@@ -44,7 +44,8 @@ def get_stock_data(s_code: str) -> pd.DataFrame:
         WHERE s_code = '{s_code}';
     """
     try:
-        with pg_conn.cursor() as cursor:
+        raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
+        with raw_conn.cursor() as cursor:
             cursor.execute(sql)
             columns = [desc[0] for desc in cursor.description]
             data = cursor.fetchall()
@@ -141,7 +142,8 @@ def get_tracing_data(s_code: str) -> tuple:
         sql = f"""
             SELECT min_td, max_td FROM {TRACING_TABLE_NAME} WHERE s_code = '{s_code}';
         """
-        with pg_conn.cursor() as cursor:
+        raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
+        with raw_conn.cursor() as cursor:
             cursor.execute(sql)
             result = cursor.fetchone()
             if result:
@@ -187,7 +189,7 @@ def process_and_store_data():
             logger.info(f"Data for s_code {s_code} already processed. Skipping.")
             continue
 
-        if LOGGER_DEBUG:
+        if DEBUG_MODE:
             logger.debug(f"Fetched data for s_code {s_code}: \n{stock_data_df.head(3)}")
 
         intervals = generate_fibonacci_intervals(len(stock_data_df))

@@ -328,6 +328,8 @@ def get_stock_sector_fund_flow_summary():
 def get_stock_sector_fund_flow_hist():
     func_name = "stock_sector_fund_flow_hist"
     b_names = get_b_names_from_table(pg_conn, "ak_dg_stock_board_industry_name_em_store")
+    if DEBUG_MODE:
+        logger.debug(f"b_name in {func_name}: {b_names[:5]}")
     all_data = []
     len_b_name = len(b_names)
     for _index, _b_name in enumerate(b_names, start=1):
