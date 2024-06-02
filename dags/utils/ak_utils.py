@@ -10,6 +10,7 @@ from io import BytesIO
 from datetime import date, datetime
 from airflow.exceptions import AirflowException
 from typing import Optional
+import psycopg2.extensions
 
 
 from utils.utils import UtilTools
@@ -86,7 +87,7 @@ class AkUtilTools(UtilTools):
 
 
     @staticmethod
-    def save_data_to_csv(df, filename, dir_path='/tmp/ak_data', include_header=True):
+    def save_data_to_csv(df, filename, dir_path=con.CACHE_ROOT, include_header=True):
         if df.empty:
             logger.warning("No data to save to CSV.")
             return None
@@ -102,23 +103,24 @@ class AkUtilTools(UtilTools):
             logger.error(f"Failed to save data to CSV: {_e}")
             return None
 
+
     @staticmethod
     def insert_data_from_csv(conn, csv_path, table_name):
+        assert isinstance(conn, psycopg2.extensions.connection)
         if not os.path.exists(csv_path):
             logger.error("CSV file does not exist.")
             return
         try:
-            _cursor = conn.cursor()
             with open(csv_path, 'r') as _file:
                 _copy_sql = f"COPY {table_name} FROM STDIN WITH CSV HEADER DELIMITER ','"
-                _cursor.copy_expert(sql=_copy_sql, file=_file)
+                with conn.cursor() as _cursor:
+                    _cursor.copy_expert(sql=_copy_sql, file=_file)
                 conn.commit()
                 logger.info(f"Data from {csv_path} successfully loaded into {table_name}.")
-            _cursor.close()
         except Exception as _e:
             conn.rollback()
             logger.error(f"Failed to load data from CSV: {_e}")
-            raise AirflowException(_e)
+            raise
 
     @staticmethod
     def get_columns_from_table(pg_conn, table_name, redis_conn: redis.Redis, ttl: int = con.DEFAULT_REDIS_TTL):
@@ -138,18 +140,15 @@ class AkUtilTools(UtilTools):
             logger.warning(f"Failed to read column names and types from Redis for table '{table_name}': {_e}")
 
         _columns = []
-        _cursor = pg_conn.cursor()
         try:
-            _cursor.execute(
-                """
+            query = """
                 SELECT column_name, data_type 
                 FROM information_schema.columns 
                 WHERE table_name = %s 
                 ORDER BY ordinal_position
-                """,
-                (table_name,)
-            )
-            _columns = [(row[0], row[1]) for row in _cursor.fetchall()]
+            """
+            result = pg_conn.execute(query, (table_name,))
+            _columns = [(row['column_name'], row['data_type']) for row in result]
             try:
                 redis_conn.setex(_redis_key, ttl, json.dumps(_columns))
                 logger.info(f"Retrieved column names and types for table '{table_name}' from PostgreSQL and cached in Redis.")
@@ -159,10 +158,10 @@ class AkUtilTools(UtilTools):
                 logger.warning(f"Failed to cache column names and types in Redis for table '{table_name}': {_e}")
         except Exception as _e:
             logger.error(f"Error fetching column names and types from table '{table_name}': {_e}")
-        finally:
-            _cursor.close()
 
         return _columns
+
+
 
     @staticmethod
     def convert_columns(df, table_name, pg_conn, redis_conn: redis.Redis):

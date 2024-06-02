@@ -17,9 +17,11 @@ DEBUG_MODE = True
 
 ZH_A_DEFAULT_START_DATE = "1980-01-01"
 DEFAULT_REDIS_TTL = 60 * 60  # 1 hour
-# STOCK_A_REALTIME_KEY= "stock_a_realtime"
+
+STOCK_A_REALTIME_KEY= "stock_a_realtime"
 
 # POSSIBLE_CODE_COLUMNS = ['s_code', 'stock_code']
 
 
 LOG_ROOT = '/data/airflow/log/'
+CACHE_ROOT = '/data/airflow/cache/'

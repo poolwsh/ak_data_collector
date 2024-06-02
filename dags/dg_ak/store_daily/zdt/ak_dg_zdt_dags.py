@@ -45,17 +45,19 @@ rollback_days = 10
 def get_tracing_data(ak_func_name: str):
     logger.info(f"Starting to get tracing dataframe for {ak_func_name}")
     try:
+        pg_conn = PGEngine.get_conn()
         td_list = dguf.get_trade_dates(pg_conn)
+        
         td_list.sort(reverse=True)
         if DEBUG_MODE:
-            logger.debug(f'length of reversed td list from trade date table {len(td_list)}')
-            logger.debug(f'first 5:{td_list[:5]}')
-        
-        cursor = pg_conn.cursor()
-        cursor.execute(f"SELECT last_td FROM {TRACING_TABLE_NAME} WHERE ak_func_name = %s", (ak_func_name,))
-        result = cursor.fetchone()
-        if result:
-            last_td = result[0]
+            logger.debug(f'Length of reversed td list from trade date table: {len(td_list)}')
+            logger.debug(f'First 5: {td_list[:5]}')
+
+        tracing_df = dguf.get_tracing_data_df(pg_conn, TRACING_TABLE_NAME)
+        result = tracing_df[tracing_df['ak_func_name'] == ak_func_name]
+
+        if not result.empty:
+            last_td = result['last_td'].iloc[0]
             if DEBUG_MODE:
                 logger.debug(f"Last trading date for {ak_func_name}: {last_td}")
             start_index = td_list.index(last_td) if last_td in td_list else 0
@@ -64,10 +66,9 @@ def get_tracing_data(ak_func_name: str):
             selected_dates = td_list[:default_trade_dates]
         
         if DEBUG_MODE:
-            logger.debug(f'length of selected_dates {len(selected_dates)}')
-            logger.debug(f'selected_dates:{selected_dates}')
-        cursor.close()
-        
+            logger.debug(f'Length of selected_dates: {len(selected_dates)}')
+            logger.debug(f'selected_dates: {selected_dates}')
+
         date_df = pd.DataFrame(selected_dates, columns=['td'])
         redis_key = f'{ZDT_DATE_LIST_KEY_PREFIX}_{ak_func_name}'
         dguf.write_df_to_redis(redis_key, date_df, task_cache_conn, con.DEFAULT_REDIS_TTL)
@@ -76,23 +77,25 @@ def get_tracing_data(ak_func_name: str):
     except Exception as e:
         logger.error(f"Failed to get tracing dataframe for {ak_func_name}: {str(e)}")
         raise AirflowException(e)
+    
 
 def get_zdt_data(ak_func_name):
+    raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
     logger.info(f"Starting to save data for {ak_func_name}")
     try:
         redis_key = f'{ZDT_DATE_LIST_KEY_PREFIX}_{ak_func_name}'
-        temp_csv_path = dguf.get_data_and_save2csv(redis_key, ak_func_name, ak_cols_config_dict, pg_conn, redis_hook.get_conn())
+        temp_csv_path = dguf.get_data_and_save2csv(redis_key, ak_func_name, ak_cols_config_dict, pg_conn, task_cache_conn)
         if DEBUG_MODE:
             logger.debug(f"Data for {ak_func_name} saved to CSV at {temp_csv_path}")
 
         # 清空表内容
         clear_table_sql = f"TRUNCATE TABLE ak_dg_{ak_func_name};"
         copy_sql = f"COPY ak_dg_{ak_func_name} FROM STDIN WITH CSV"
-        with pg_conn.cursor() as cursor:
+        with raw_conn.cursor() as cursor:
             cursor.execute(clear_table_sql)
             with open(temp_csv_path, 'r') as file:
                 cursor.copy_expert(sql=copy_sql, file=file)
-            pg_conn.commit()
+            raw_conn.commit()
         logger.info(f"Table ak_dg_{ak_func_name} has been cleared.")
         logger.info("Data successfully inserted into PostgreSQL from CSV.")
 
@@ -109,7 +112,7 @@ def get_zdt_data(ak_func_name):
         raise AirflowException(e)
     except Exception as e:
         logger.error(f"Failed to save data for {ak_func_name}: {str(e)}")
-        pg_conn.rollback()
+        raw_conn.rollback()
         raise AirflowException(e)
     finally:
         if 'cursor' in locals():
@@ -134,8 +137,8 @@ def store_zdt_data(ak_func_name: str):
             {update_columns}
             RETURNING td;
         """
-        
-        inserted_rows = dguf.store_ak_data(pg_conn, ak_func_name, insert_sql, truncate=False)
+        raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
+        inserted_rows = dguf.store_ak_data(raw_conn, ak_func_name, insert_sql, truncate=False)
         # 提取所有 td 的最大值
         if inserted_rows:
             max_td = max(row[0] for row in inserted_rows)
@@ -177,12 +180,13 @@ def update_tracing_data(ak_func_name):
             SET last_td = EXCLUDED.last_td, update_time = EXCLUDED.update_time;
         """
 
-        cursor = pg_conn.cursor()
+        raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
+        cursor = raw_conn.cursor()
         cursor.executemany(insert_sql, data)
-        pg_conn.commit()
+        raw_conn.commit()
         logger.info(f"Inserted/Updated tracing data for {len(date_list)} dates in {ak_func_name}")
     except Exception as e:
-        pg_conn.rollback()
+        raw_conn.rollback()
         logger.error(f"Error executing bulk insert for {ak_func_name}: {e}")
         raise
     finally:

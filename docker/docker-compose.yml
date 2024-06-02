@@ -44,6 +44,8 @@ services:
       AIRFLOW__CELERY__WORKER_CONCURRENCY: 16
     volumes:
       - ../dags:/opt/airflow/dags
+      - '/data/airflow/log/':'/data/airflow/log/'
+      - '/data/airflow/cache/':'/data/airflow/cache/'
     depends_on:
       - timescaledb
       - redis

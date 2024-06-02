@@ -29,12 +29,6 @@ import dags.utils.config as con
 
 DEBUG_MODE = con.DEBUG_MODE
 
-# 配置 today 变量
-if DEBUG_MODE:
-    today = '2024-05-24'
-else:
-    today = datetime.now().strftime('%Y-%m-%d')
-
 # 配置数据库连接
 pg_conn = PGEngine.get_conn()
 
@@ -50,6 +44,13 @@ STORED_KEYS_KEY_PREFIX = "stored_keys"
 TRACING_TABLE_NAME_BY_DATE = 'ak_dg_tracing_by_date'
 TRACING_TABLE_NAME_BY_DATE_PARAM = 'ak_dg_tracing_by_date_1_param'
 TRACING_TABLE_NAME_BY_SCODE_DATE = 'ak_dg_tracing_by_scode_date'
+
+
+# 配置 today 变量
+if DEBUG_MODE:
+    today = max(dguf.get_trade_dates(pg_conn)).strftime('%Y-%m-%d')
+else:
+    today = datetime.now().strftime('%Y-%m-%d')
 
 
 def store_tracing_data(tracing_table, data):
@@ -68,10 +69,20 @@ def store_tracing_data(tracing_table, data):
             SET last_td = EXCLUDED.last_td, update_time = EXCLUDED.update_time;
         """
     
-    cursor = pg_conn.cursor()
-    cursor.executemany(insert_sql, data)
-    pg_conn.commit()
-    cursor.close()
+    raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
+    
+    try:
+        with raw_conn.cursor() as cursor:
+            cursor.executemany(insert_sql, data)
+        raw_conn.commit()
+        logger.info(f"Tracing data successfully inserted/updated in {tracing_table}.")
+    except Exception as e:
+        raw_conn.rollback()
+        logger.error(f"Failed to store tracing data in {tracing_table}: {str(e)}")
+        raise AirflowException(e)
+
+
+
 
 
 def is_trading_day(**kwargs) -> str:
@@ -116,7 +127,7 @@ def process_data_columns(data, func_name, s_code=None, b_name=None):
 def insert_data_with_conflict_handling(df, table_name, conflict_columns, update_columns):
     columns = df.columns.tolist()
     values = [tuple(x) for x in df.to_numpy()]
-    
+
     # SQL template for inserting data with conflict handling
     insert_sql = f"""
         INSERT INTO {table_name} ({', '.join(columns)})
@@ -124,26 +135,33 @@ def insert_data_with_conflict_handling(df, table_name, conflict_columns, update_
         ON CONFLICT ({', '.join(conflict_columns)}) DO UPDATE SET
         {', '.join([f'{col} = EXCLUDED.{col}' for col in update_columns])};
     """
-    
+
     # Ensure no duplicate conflict keys within the same batch
     unique_values_dict = {}
     for row in values:
         conflict_key = tuple(row[columns.index(col)] for col in conflict_columns)
         unique_values_dict[conflict_key] = row
     unique_values = list(unique_values_dict.values())
-    
-    cursor = pg_conn.cursor()
-    psycopg2.extras.execute_values(
-        cursor, insert_sql, unique_values, template=None, page_size=100
-    )
-    pg_conn.commit()
-    cursor.close()
 
+    # Get raw psycopg2 connection from SQLAlchemy connection
+    raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
+
+    try:
+        with raw_conn.cursor() as cursor:
+            psycopg2.extras.execute_values(
+                cursor, insert_sql, unique_values, template=None, page_size=100
+            )
+        raw_conn.commit()
+        logger.info(f"Data successfully inserted into {table_name} with conflict handling.")
+    except Exception as e:
+        raw_conn.rollback()
+        logger.error(f"Failed to insert data into {table_name}: {str(e)}")
+        raise AirflowException(e)
 
 def fetch_and_process_data(func_name, ak_func, table_name, params=None, param_key=None, b_name=None):
     logger.info(f"Processing data for {func_name}")
     try:
-        data =dguf.try_to_call(ak_func, params)
+        data = dguf.try_to_call(ak_func, params)
         if data is None or data.empty:
             logger.warning(f"No data found for {func_name}")
             return
@@ -163,7 +181,7 @@ def fetch_and_process_data(func_name, ak_func, table_name, params=None, param_ke
         data.dropna(inplace=True)
 
         # Convert column order and data types
-        data =dguf.convert_columns(data, table_name, pg_conn, redis_hook.get_conn())
+        data = dguf.convert_columns(data, table_name, pg_conn, task_cache_conn)
 
         # Determine conflict columns and update columns
         if table_name in ['ak_dg_stock_sector_fund_flow_rank_store', 'stock_sector_fund_flow_summary_store', 'ak_dg_stock_sector_fund_flow_hist_store', 'ak_dg_stock_concept_fund_flow_hist_store']:
@@ -186,11 +204,13 @@ def fetch_and_process_data(func_name, ak_func, table_name, params=None, param_ke
     except Exception as e:
         logger.error(f"Failed to process data for {func_name}: {str(e)}")
         raise AirflowException(e)
+    
 
 
 def get_b_names_from_table(pg_conn, table_name: str, td=today) -> list:
     query = f"SELECT DISTINCT b_name FROM {table_name} WHERE td = %s"
-    cursor = pg_conn.cursor()
+    raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
+    cursor = raw_conn.cursor()
     cursor.execute(query, (td,))
     results = cursor.fetchall()
     cursor.close()
@@ -203,8 +223,8 @@ def get_data_by_s_code(func_name, cols_config):
     _len_s_code_list = len(s_code_list)
     for _index, _s_code in enumerate(s_code_list, start=1):
         try:
-            # if DEBUG_MODE and _index > 5:
-            #     break
+            if DEBUG_MODE and _index > 5:
+                break
             logger.info(f'({_index}/{_len_s_code_list}) downloading data with s_code={_s_code}')
             logger.info(f"Fetching data for s_code: {_s_code} using function {func_name}")
             ak_func = getattr(ak, func_name)

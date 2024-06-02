@@ -1,6 +1,8 @@
 
 import redis
 from sqlalchemy import create_engine
+from sqlalchemy.engine.base import Connection as SQLAlchemyConnection
+import psycopg2.extensions
 import dags.utils.config as con
 
 class RedisEngine(object):
@@ -21,6 +23,9 @@ class RedisEngine(object):
                 print(f"Error connecting to the Redis server (db {db}): {e}")
                 RedisEngine.connections[db] = None
         return RedisEngine.connections[db]
+
+task_cache_conn = RedisEngine.get_connection(3)
+
 
 
 class PGEngine(object):
@@ -44,4 +49,14 @@ class PGEngine(object):
                 PGEngine.pg_conn = None
         return PGEngine.pg_conn
 
-task_cache_conn = RedisEngine.get_connection(3)
+    @staticmethod
+    def get_psycopg2_conn(conn):
+        if isinstance(conn, SQLAlchemyConnection):
+            # If it's a SQLAlchemy connection, get the raw psycopg2 connection
+            return conn.connection.connection
+        elif isinstance(conn, psycopg2.extensions.connection):
+            # If it's already a psycopg2 connection, return it directly
+            return conn
+        else:
+            raise TypeError("Unsupported connection type")
+

@@ -16,6 +16,7 @@ import pandas as pd
 import akshare as ak
 from datetime import date, datetime, timedelta
 from typing import Optional, Union
+from sqlalchemy.exc import SQLAlchemyError
 
 import utils.config as con
 from utils.ak_utils import AkUtilTools
@@ -107,12 +108,13 @@ class DgAkUtilFuncs(AkUtilTools):
     # region tool funcs
     @staticmethod
     def get_trade_dates(pg_conn) -> list:
-        _query = f"SELECT trade_date FROM ak_dg_stock_zh_a_trade_date;"
+        _query = "SELECT trade_date FROM ak_dg_stock_zh_a_trade_date;"
         if DEBUG_MODE:
             logger.debug(f"Executing query to get trade dates: {_query}")
         try:
-            _df = pd.read_sql(_query, pg_conn)
-            _trade_dates = _df['trade_date'].tolist()
+            result = pg_conn.execute(_query)
+            rows = result.fetchall()
+            _trade_dates = [row['trade_date'] for row in rows]
             logger.info("Trade dates retrieved successfully from ak_dg_stock_zh_a_trade_date.")
             if DEBUG_MODE:
                 logger.debug(f"Trade dates length: {len(_trade_dates)}, first 5 dates: {_trade_dates[:5]}")
@@ -138,7 +140,7 @@ class DgAkUtilFuncs(AkUtilTools):
         return True
 
     @staticmethod
-    def get_data_and_save2csv(redis_key, ak_func_name, ak_cols_config_dict, pg_conn, redis_conn, temp_dir='/tmp/ak_dg'):
+    def get_data_and_save2csv(redis_key, ak_func_name, ak_cols_config_dict, pg_conn, redis_conn, temp_dir=con.CACHE_ROOT):
         if DEBUG_MODE:
             logger.debug(f"Fetching data for redis_key: {redis_key}, ak_func_name: {ak_func_name}")
         _table_name = f"ak_dg_{ak_func_name}"
@@ -437,12 +439,15 @@ class DgAkUtilFuncs(AkUtilTools):
         if DEBUG_MODE:
             logger.debug(f"Executing query to get tracing data: {_query}")
         try:
-            _df = pd.read_sql(_query, pg_conn)
+            result = pg_conn.execute(_query)
+            rows = result.fetchall()
+            columns = result.keys()
+            _df = pd.DataFrame(rows, columns=columns)
             logger.info(f"Data retrieved from {tracing_table_name} successfully.")
             if DEBUG_MODE:
                 logger.debug(f"Tracing data length: {len(_df)}, first 5 rows: {_df.head().to_dict(orient='records')}")
             return _df
-        except Exception as _e:
+        except SQLAlchemyError as _e:
             logger.error(f"Failed to retrieve data from {tracing_table_name}: {_e}")
             raise _e
 

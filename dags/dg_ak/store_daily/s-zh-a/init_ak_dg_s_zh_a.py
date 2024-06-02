@@ -7,14 +7,13 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import pandas as pd
 from airflow.exceptions import AirflowException
-from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.providers.redis.hooks.redis import RedisHook
 
 # 动态添加项目根目录到Python路径
 current_dir = Path(__file__).resolve().parent
 project_root = current_dir.parent.parent.parent.parent
 sys.path.append(str(project_root))
 
+from dags.utils.db import PGEngine, task_cache_conn
 from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dguf
 from dags.utils.logger import logger
 import dags.utils.config as con
@@ -23,9 +22,7 @@ import dags.utils.config as con
 DEBUG_MODE = con.DEBUG_MODE
 
 # 配置数据库连接
-redis_hook = RedisHook(redis_conn_id=con.REDIS_CONN_ID)
-pgsql_hook = PostgresHook(postgres_conn_id=con.TXY800_PGSQL_CONN_ID)
-pg_conn = pgsql_hook.get_conn()
+pg_conn = PGEngine.get_conn()
 
 # 定义常量
 TRACING_TABLE_NAME = 'ak_dg_tracing_s_zh_a'
@@ -137,7 +134,7 @@ def insert_code_name_to_db(code_name_list: list[tuple[str, str]]):
 def init_ak_dg_s_zh_a(ak_func_name: str, period: str, adjust: str):
     try:
         logger.info(f"Initializing data for {ak_func_name} with period={period} and adjust={adjust}")
-        s_code_name_list = dguf.get_s_code_name_list(redis_hook.get_conn())
+        s_code_name_list = dguf.get_s_code_name_list(task_cache_conn)
         total_codes = len(s_code_name_list)
         all_trade_dates = set()
 
@@ -162,7 +159,7 @@ def init_ak_dg_s_zh_a(ak_func_name: str, period: str, adjust: str):
 
             if not stock_data_df.empty:
                 stock_data_df['s_code'] = stock_data_df['s_code'].astype(str)
-                stock_data_df = dguf.convert_columns(stock_data_df, f'ak_dg_{ak_func_name}_store_{period}_{adjust}', pg_conn, redis_hook.get_conn())
+                stock_data_df = dguf.convert_columns(stock_data_df, f'ak_dg_{ak_func_name}_store_{period}_{adjust}', pg_conn, task_cache_conn)
                 if 'td' in stock_data_df.columns:
                     stock_data_df['td'] = pd.to_datetime(stock_data_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
 
