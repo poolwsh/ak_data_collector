@@ -148,8 +148,8 @@ def init_ak_dg_s_zh_a(ak_func_name: str, period: str, adjust: str):
         yesterday_date = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
 
         for index, (s_code, s_name) in enumerate(s_code_name_list):
-            if DEBUG_MODE and index >= 5:
-                break
+            # if DEBUG_MODE and index >= 5:
+            #     break
             logger.info(f'({index + 1}/{total_codes}) Fetching data for s_code={s_code}, s_name={s_name}')
             if adjust == 'bfq':
                 stock_data_df = dguf.get_s_code_data(
