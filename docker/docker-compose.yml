@@ -2,13 +2,14 @@ version: '3.8'
 
 services:
   timescaledb:
-    image: timescale/timescaledb:latest-pg13
+    image: timescale/timescaledb:latest-pg15
     container_name: timescaledb
     environment:
       POSTGRES_PASSWORD: pi=3.14159
       TZ: Asia/Shanghai
     volumes:
-      - /home/wsh/db/timescaledb/data:/var/lib/postgresql/data
+      - /data/airflow/db/timescaledb/data:/var/lib/postgresql/data
+      - ./init_db.sh:/docker-entrypoint-initdb.d/init_db.sh  # 挂载初始化脚本
     ports:
       - "25432:5432"
     restart: always
@@ -20,8 +21,8 @@ services:
       TZ: Asia/Shanghai
     command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "pi=3.14159"]
     volumes:
-      - /home/wsh/db/redis/config/redis.conf:/usr/local/etc/redis/redis.conf
-      - /home/wsh/db/redis/data:/data
+      - /data/airflow/db/redis/config/redis.conf:/usr/local/etc/redis/redis.conf
+      - /data/airflow/db/redis/data:/data
     ports:
       - "6379:6379"
     restart: always
@@ -32,25 +33,27 @@ services:
       dockerfile: docker/Dockerfile
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:pi=3.14159@timescaledb:5432/postgres
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow_pw@timescaledb:5432/airflow_data
       AIRFLOW__CELERY__BROKER_URL: redis://:pi=3.14159@redis:6379/0
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://postgres:pi=3.14159@timescaledb:5432/postgres
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow_pw@timescaledb:5432/airflow_data
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
-      AIRFLOW__WEBSERVER__SECRET_KEY: 'YOUR_SECRET_KEY'
+      AIRFLOW__WEBSERVER__SECRET_KEY: 'YOUR_GENERATED_SECRET_KEY'
       AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: 'True'
+      AIRFLOW__DATABASE__SQL_ALCHEMY_POOL_RECYCLE: 1800
       AIRFLOW__CORE__PARALLELISM: 32
       AIRFLOW__CORE__DAG_CONCURRENCY: 16
       AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: 4
       AIRFLOW__CELERY__WORKER_CONCURRENCY: 16
     volumes:
       - ../dags:/opt/airflow/dags
-      - '/data/airflow/log/':'/data/airflow/log/'
-      - '/data/airflow/cache/':'/data/airflow/cache/'
+      - /data/airflow/log:/data/airflow/log
+      - /data/airflow/cache:/data/airflow/cache
+      - /home/wsh/.cache/pip:/root/.cache/pip
     depends_on:
       - timescaledb
       - redis
     ports:
-      - "8080:8080"
+      - "8081:8080"
     restart: always
     deploy:
       resources:
