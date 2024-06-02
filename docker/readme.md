@@ -44,7 +44,7 @@ docker-compose exec airflow airflow users create \
 
 ## run init shell
 ```shell
-python /data/workspace/git/ak_data_collector/tools/init_db.py
+python init_ak_dag_db.py
 ```
 
 ## run airflow

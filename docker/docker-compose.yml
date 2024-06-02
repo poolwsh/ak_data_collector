@@ -1,5 +1,9 @@
 version: '3.8'
 
+networks:
+  airflow_network:
+    driver: bridge
+
 services:
   timescaledb:
     image: timescale/timescaledb:latest-pg15
@@ -8,10 +12,12 @@ services:
       POSTGRES_PASSWORD: pi=3.14159
       TZ: Asia/Shanghai
     volumes:
-      - /data/airflow/db/timescaledb/data:/var/lib/postgresql/data
-      - ./init_db.sh:/docker-entrypoint-initdb.d/init_airflow_db.sh  # 挂载初始化脚本
+      # - /data/airflow/db/timescaledb/data:/var/lib/postgresql/data
+      - ./init_airflow_db.sh:/docker-entrypoint-initdb.d/init_airflow_db.sh  # 挂载初始化脚本
     ports:
       - "25432:5432"
+    networks:
+      - airflow_network
     restart: always
 
   redis:
@@ -25,6 +31,8 @@ services:
       - /data/airflow/db/redis/data:/data
     ports:
       - "6379:6379"
+    networks:
+      - airflow_network
     restart: always
 
   airflow:
@@ -49,14 +57,11 @@ services:
       - /data/airflow/log:/data/airflow/log
       - /data/airflow/cache:/data/airflow/cache
       - /home/wsh/.cache/pip:/root/.cache/pip
-    depends_on:
-      - timescaledb
-      - redis
+    networks:
+      - airflow_network
     ports:
       - "8081:8080"
     restart: always
-    deploy:
-      resources:
-        limits:
-          cpus: '3.0'
-          memory: 4G
+    depends_on:
+      - timescaledb
+      - redis

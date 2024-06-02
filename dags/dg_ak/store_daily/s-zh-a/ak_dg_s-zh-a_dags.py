@@ -29,6 +29,8 @@ DEBUG_MODE = con.DEBUG_MODE
 
 # 配置数据库连接
 pg_conn = PGEngine.get_conn()
+logger.debug(PGEngine.db_engine)
+logger.debug(f'pg_conn={pg_conn}')
 
 # 配置路径
 config_path = current_path / 'ak_dg_s-zh-a_config.py'

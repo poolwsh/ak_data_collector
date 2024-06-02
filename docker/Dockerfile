@@ -10,6 +10,9 @@ RUN pip install --no-cache-dir --timeout=1000 -r requirements.txt
 # Copy dags
 COPY dags/ $AIRFLOW_HOME/dags/
 
+# Copy tools
+COPY tools/ /opt/airflow/tools/
+
 # Copy entrypoint.sh
 COPY docker/entrypoint.sh /entrypoint.sh
 

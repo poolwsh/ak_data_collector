@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine.base import Connection as SQLAlchemyConnection
 import psycopg2.extensions
 import dags.utils.config as con
+from dags.utils.logger import logger
 
 class RedisEngine(object):
     redis_pool = redis.ConnectionPool(
@@ -27,11 +28,11 @@ class RedisEngine(object):
 task_cache_conn = RedisEngine.get_connection(3)
 
 
-
 class PGEngine(object):
     db_engine = create_engine(
         'postgresql+psycopg2://{0}:{1}@{2}:{3}/{4}'.format(
-            con.pg_sql_user, con.pg_sql_password, con.pg_sql_hostname, con.pg_sql_port, con.pg_db_name
+            con.ak_data_user, con.ak_data_password, con.ak_data_hostname, 
+            con.ak_data_port, con.ak_data_db_name
         ), 
         echo=True if con.DEBUG_MODE else False,
         pool_size=20, 
@@ -44,8 +45,9 @@ class PGEngine(object):
         if PGEngine.pg_conn is None or PGEngine.pg_conn.closed:
             try:
                 PGEngine.pg_conn = PGEngine.db_engine.connect()
+                logger.debug('create new postgresql connection')
             except Exception as e:
-                print(f"Error connecting to the database: {e}")
+                logger.error(f"Error connecting to the database: {e}")
                 PGEngine.pg_conn = None
         return PGEngine.pg_conn
 
