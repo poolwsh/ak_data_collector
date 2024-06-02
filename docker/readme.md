@@ -15,7 +15,7 @@ docker system prune -a --volumes -f
 
 ## prepare
 ```shell
-chmod +x init_db.sh
+chmod +x init_airflow_db.sh
 chmod +x entrypoint.sh
 ```
 

@@ -7,6 +7,5 @@ psql -v ON_ERROR_STOP=1 --username "postgres" <<-EOSQL
     GRANT ALL PRIVILEGES ON DATABASE airflow_data TO airflow;
     \c airflow_data
     GRANT ALL ON SCHEMA public TO airflow;
+    ALTER USER airflow WITH SUPERUSER;
 EOSQL
-
-
