@@ -223,8 +223,8 @@ def get_data_by_s_code(func_name, cols_config):
     _len_s_code_list = len(s_code_list)
     for _index, _s_code in enumerate(s_code_list, start=1):
         try:
-            if DEBUG_MODE and _index > 5:
-                break
+            # if DEBUG_MODE and _index > 5:
+            #     break
             logger.info(f'({_index}/{_len_s_code_list}) downloading data with s_code={_s_code}')
             logger.info(f"Fetching data for s_code: {_s_code} using function {func_name}")
             ak_func = getattr(ak, func_name)

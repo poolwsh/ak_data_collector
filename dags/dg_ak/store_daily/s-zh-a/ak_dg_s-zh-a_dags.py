@@ -115,8 +115,8 @@ def get_stock_data(ak_func_name: str, period: str, adjust: str):
         logger.info(f"Table ak_dg_{ak_func_name}_{period}_{adjust} has been cleared.")
 
         for _index, (_s_code, _start_date, _end_date) in enumerate(_arg_list):
-            if con.DEBUG_MODE and _index > 5:
-                break
+            # if con.DEBUG_MODE and _index > 5:
+            #     break
             logger.info(f'({_index + 1}/{_total_codes}) Fetching data for s_code={_s_code} from {_start_date} to {_end_date}')
             if adjust == 'bfq':
                 _stock_data_df = dguf.get_s_code_data(
