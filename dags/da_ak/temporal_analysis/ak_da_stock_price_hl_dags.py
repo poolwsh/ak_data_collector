@@ -75,10 +75,11 @@ def insert_or_update_data_from_csv(csv_path):
         logger.error("CSV file does not exist.")
         return
     try:
-        _cursor = pg_conn.cursor()
+        raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
+        _cursor = raw_conn.cursor()
         
         # 清空临时表
-        clear_table(pg_conn, TEMP_PRICE_HL_TABLE_NAME)
+        clear_table(raw_conn, TEMP_PRICE_HL_TABLE_NAME)
         
         # 导入CSV到临时表
         with open(csv_path, 'r') as _file:
@@ -105,12 +106,12 @@ def insert_or_update_data_from_csv(csv_path):
         """)
         
         # 提交事务
-        pg_conn.commit()
+        raw_conn.commit()
         logger.info(f"Data from {csv_path} successfully loaded and updated into {PRICE_HL_TABLE_NAME}.")
         
         _cursor.close()
     except Exception as _e:
-        pg_conn.rollback()
+        raw_conn.rollback()
         logger.error(f"Failed to load data from CSV: {_e}")
         raise AirflowException(_e)
 
@@ -118,9 +119,10 @@ def insert_or_update_data_from_csv(csv_path):
 
 def insert_or_update_tracing_data(s_code: str, min_td: str, max_td: str):
     try:
+        raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
         host_name = os.uname().nodename
         logger.info(f'storing tracing data of s_code={s_code}, min_td={min_td}, max_td={max_td}')
-        with pg_conn.cursor() as cursor:
+        with raw_conn.cursor() as cursor:
             sql = f"""
                 INSERT INTO {TRACING_TABLE_NAME} (s_code, min_td, max_td, host_name)
                 VALUES ('{s_code}', '{min_td}', '{max_td}', '{host_name}')
@@ -131,7 +133,7 @@ def insert_or_update_tracing_data(s_code: str, min_td: str, max_td: str):
                 update_time = CURRENT_TIMESTAMP;
             """
             cursor.execute(sql)
-            pg_conn.commit()
+            raw_conn.commit()
         logger.info(f"Tracing data inserted/updated for s_code={s_code}.")
     except Exception as e:
         logger.error(f"Failed to insert/update tracing data for s_code={s_code}: {str(e)}")
