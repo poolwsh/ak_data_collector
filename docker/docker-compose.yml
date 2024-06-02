@@ -9,7 +9,7 @@ services:
       TZ: Asia/Shanghai
     volumes:
       - /data/airflow/db/timescaledb/data:/var/lib/postgresql/data
-      - ./init_db.sh:/docker-entrypoint-initdb.d/init_db.sh  # 挂载初始化脚本
+      - ./init_db.sh:/docker-entrypoint-initdb.d/init_airflow_db.sh  # 挂载初始化脚本
     ports:
       - "25432:5432"
     restart: always
@@ -60,6 +60,3 @@ services:
         limits:
           cpus: '3.0'
           memory: 4G
-
-volumes:
-  postgres_data:
