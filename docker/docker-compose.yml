@@ -9,6 +9,7 @@ services:
     image: timescale/timescaledb:latest-pg15
     container_name: timescaledb
     environment:
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: pi=3.14159
       TZ: Asia/Shanghai
     volumes:

@@ -239,7 +239,8 @@ def update_tracing_date(ak_func_name: str, period: str, adjust: str):
         SET last_td = EXCLUDED.last_td, update_time = EXCLUDED.update_time;
     """
     try:
-        pg_conn.executemany(_insert_sql, _date_values)
+        raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
+        raw_conn.executemany(_insert_sql, _date_values)
         logger.info(f"Tracing data saved for {ak_func_name} on keys: {_stored_keys}")
     except Exception as e:
         logger.error(f"Failed to update tracing data for {ak_func_name}: {str(e)}")
