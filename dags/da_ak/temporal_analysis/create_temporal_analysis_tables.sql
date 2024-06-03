@@ -16,8 +16,7 @@ CREATE TABLE ak_da_stock_price_hl (
     d_tg_l INT,                         -- 距目标低点的天数
     chg_to_tg FLOAT,                    -- 到目标高点或目标低点的变化值
     pct_chg_to_tg FLOAT,                -- 到目标高点或目标低点的百分比变化
-    PRIMARY KEY (s_code, td, interval), -- 组合主键：股票代码、交易日期和间隔
-    FOREIGN KEY (s_code, td) REFERENCES ak_dg_stock_zh_a_hist_store_daily_hfq (s_code, td) ON DELETE CASCADE
+    PRIMARY KEY (s_code, td, interval)  -- 组合主键：股票代码、交易日期和间隔
 );
 SELECT create_hypertable('ak_da_stock_price_hl', 'td');
 
@@ -38,7 +37,6 @@ CREATE TABLE ak_da_stock_price_hl_store (
     d_tg_l INT,                         -- 距目标低点的天数
     chg_to_tg FLOAT,                    -- 到目标高点或目标低点的变化值
     pct_chg_to_tg FLOAT,                -- 到目标高点或目标低点的百分比变化
-    PRIMARY KEY (s_code, td, interval), -- 组合主键：股票代码、交易日期和间隔
-    FOREIGN KEY (s_code, td) REFERENCES ak_dg_stock_zh_a_hist_store_daily_hfq (s_code, td) ON DELETE CASCADE
+    PRIMARY KEY (s_code, td, interval)  -- 组合主键：股票代码、交易日期和间隔
 );
 SELECT create_hypertable('ak_da_stock_price_hl_store', 'td');

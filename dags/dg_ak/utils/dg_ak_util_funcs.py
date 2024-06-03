@@ -213,6 +213,9 @@ class DgAkUtilFuncs(AkUtilTools):
                 _retry_delay = retry_delay * (1 + _attempt)
                 logger.warning(f"Attempt {_attempt + 1}: ConnectionError encountered. Retrying after {_retry_delay} seconds...")
                 time.sleep(_retry_delay)
+            except KeyError as ke:
+                logger.error(f"KeyError calling function {ak_func.__name__} with parameters: {_param_dict}. Error: {ke}")
+                break  # Skip further retries for this specific KeyError
             except ValueError as ve:
                 if "Length mismatch" in str(ve):
                     logger.error(f"Date range exceeded for function {ak_func.__name__} with params {_param_dict}.")
