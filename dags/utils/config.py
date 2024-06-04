@@ -30,5 +30,5 @@ STOCK_A_REALTIME_KEY= "stock_a_realtime"
 # POSSIBLE_CODE_COLUMNS = ['s_code', 'stock_code']
 
 
-LOG_ROOT = '/data/airflow/log/'
-CACHE_ROOT = '/data/airflow/cache/'
+LOG_ROOT = '/data/airflow/log'
+CACHE_ROOT = '/data/airflow/cache'
