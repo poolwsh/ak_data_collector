@@ -20,6 +20,7 @@ class Config:
         self.DEFAULT_REDIS_TTL = 60 * 60  # 1 hour
 
         self.STOCK_A_REALTIME_KEY = "stock_a_realtime"
+        self.INDEX_A_REALTIME_KEY = "index_a_realtime"
 
         self.LOG_ROOT = '/data/airflow/log'
         self.CACHE_ROOT = '/data/airflow/cache'

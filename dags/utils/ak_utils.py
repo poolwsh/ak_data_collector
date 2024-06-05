@@ -9,6 +9,7 @@ from datetime import date, datetime
 from airflow.exceptions import AirflowException
 from typing import Optional
 import psycopg2.extensions
+from psycopg2 import sql
 
 from utils.utils import UtilTools
 from utils.config import config as con
@@ -113,63 +114,71 @@ class AkUtilTools(UtilTools):
 
 
     @staticmethod
-    def insert_data_from_csv(conn, csv_path, table_name, redis_conn: redis.Redis):
-        assert isinstance(conn, psycopg2.extensions.connection)
+    def get_primary_key_columns(pg_conn, table_name: str):
+        query = """
+            SELECT a.attname
+            FROM pg_index i
+            JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+            WHERE i.indrelid = %s::regclass AND i.indisprimary
+        """
+        with pg_conn.cursor() as cursor:
+            cursor.execute(query, (table_name,))
+            result = cursor.fetchall()
+            return [row[0] for row in result]
+        
+    @staticmethod
+    def insert_data_from_csv(conn, csv_path: str, table_name: str, redis_conn):
         if not os.path.exists(csv_path):
-            logger.error("CSV file does not exist.")
-            return
+            raise FileNotFoundError(f"CSV file does not exist: {csv_path}")
 
         temp_table_name = f"{table_name}_temp"
 
         try:
             with conn.cursor() as _cursor:
-                # 动态获取正式表的列名和类型
                 columns = AkUtilTools.get_columns_from_table(conn, table_name, redis_conn)
+                primary_keys = AkUtilTools.get_primary_key_columns(conn, table_name)
 
-                # 检查临时表是否存在，如果不存在则创建
-                _cursor.execute(f"""
+                if not primary_keys:
+                    raise ValueError(f"No primary key found for table '{table_name}'")
+
+                _cursor.execute(sql.SQL("""
                     SELECT EXISTS (
                         SELECT 1
                         FROM information_schema.tables
-                        WHERE table_name = '{temp_table_name}'
-                    );
-                """)
+                        WHERE table_name = %s
+                    )
+                """), [temp_table_name])
                 temp_table_exists = _cursor.fetchone()[0]
 
                 if not temp_table_exists:
-                    # 创建临时表
                     columns_def = ", ".join([f"{col[0]} {col[1]}" for col in columns])
-                    _cursor.execute(f"CREATE TABLE {temp_table_name} ({columns_def})")
+                    _cursor.execute(sql.SQL("CREATE TABLE {} ({})").format(sql.Identifier(temp_table_name), sql.SQL(columns_def)))
 
-                # 清空临时表
-                _cursor.execute(f"TRUNCATE TABLE {temp_table_name}")
+                _cursor.execute(sql.SQL("TRUNCATE TABLE {}").format(sql.Identifier(temp_table_name)))
 
-                # 把csv文件放入临时表
                 with open(csv_path, 'r') as _file:
-                    _copy_sql = f"COPY {temp_table_name} FROM STDIN WITH CSV HEADER DELIMITER ','"
+                    _copy_sql = sql.SQL("COPY {} FROM STDIN WITH CSV HEADER DELIMITER ','").format(sql.Identifier(temp_table_name))
                     _cursor.copy_expert(sql=_copy_sql, file=_file)
 
-                # 动态生成 ON CONFLICT 子句
-                conflict_columns = [col[0] for col in columns if col[0] in ['s_code', 'td']]
-                conflict_target = ", ".join(conflict_columns)
-                update_columns = ", ".join([f"{col[0]} = EXCLUDED.{col[0]}" for col in columns if col[0] not in conflict_columns])
+                conflict_target = sql.SQL(", ").join(map(sql.Identifier, primary_keys))
+                update_columns = sql.SQL(", ").join(
+                    sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col[0]), sql.Identifier(col[0]))
+                    for col in columns if col[0] not in primary_keys
+                )
 
-                # 把数据从临时表抄写如正式表，如果有冲突用新数据覆盖老数据
-                insert_sql = f"""
-                INSERT INTO {table_name}
-                SELECT * FROM {temp_table_name}
-                ON CONFLICT ({conflict_target}) DO UPDATE SET
-                    {update_columns}
-                """
+                insert_sql = sql.SQL("""
+                    INSERT INTO {} 
+                    SELECT * FROM {} 
+                    ON CONFLICT ({}) DO UPDATE SET {}
+                """).format(sql.Identifier(table_name), sql.Identifier(temp_table_name), conflict_target, update_columns)
                 _cursor.execute(insert_sql)
 
                 conn.commit()
                 logger.info(f"Data from {csv_path} successfully loaded into {table_name}.")
-        except Exception as _e:
+        except Exception as e:
             conn.rollback()
-            logger.error(f"Failed to load data from CSV: {_e}")
+            logger.error(f"Failed to load data from CSV: {e}")
             raise
-
 
 
     @staticmethod

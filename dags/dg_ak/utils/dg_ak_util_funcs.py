@@ -35,6 +35,40 @@ class DgAkUtilFuncs(AkUtilTools):
 
     default_pause_time = 0.2  # 200ms
 
+    @staticmethod
+    def get_i_code_data(ak_func_name, ak_cols_config_dict, i_code, period, start_date, end_date, pause_time: float = default_pause_time):
+        if DEBUG_MODE:
+            logger.debug(f"Fetching data for i_code: {i_code}, period: {period}, start_date: {start_date}, end_date: {end_date}")
+        _ak_func = getattr(ak, ak_func_name, None)
+        if _ak_func is None:
+            _error_msg = f'Function {ak_func_name} not found in module akshare.'
+            logger.error(_error_msg)
+            raise AirflowException(_error_msg)
+        
+        _i_df = DgAkUtilFuncs.try_to_call(
+            _ak_func,
+            {'symbol': i_code, 'period': period,
+             'start_date': start_date, 'end_date': end_date
+             }, pause_time=pause_time)
+        
+        if _i_df is None or _i_df.empty:
+            if _i_df is None:
+                _error_msg = f'Data function {ak_func_name} returned None with params(i_code={i_code}, period={period}, start_date={start_date}, end_date={end_date}).'
+                logger.error(_error_msg)
+            else:
+                _warning_msg = f'No data found for {ak_func_name} with params(i_code={i_code}, period={period}, start_date={start_date}, end_date={end_date}).'
+                logger.warning(_warning_msg)
+            return pd.DataFrame()  # 返回空的 DataFrame，以避免进一步的处理出错
+
+        if DEBUG_MODE:
+            logger.debug(f"Removing unnecessary columns for ak_func_name: {ak_func_name}")
+        _i_df = DgAkUtilFuncs.remove_cols(_i_df, ak_cols_config_dict[ak_func_name])
+        _i_df.rename(columns=DgAkUtilFuncs.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
+        _i_df['i_code'] = i_code
+        if DEBUG_MODE:
+            logger.debug(f'Processed i_code data for {i_code}, length: {len(_i_df)}, first 5 rows: {_i_df.head().to_dict(orient="records")}')
+        return _i_df
+    
     # region stock funcs
 
     @staticmethod
@@ -76,33 +110,33 @@ class DgAkUtilFuncs(AkUtilTools):
             logger.debug(f'Processed s_code data for {s_code}, length: {len(_s_df)}, first 5 rows: {_s_df.head().to_dict(orient="records")}')
         return _s_df
 
-    @staticmethod
-    def merge_s_code_data(ak_func_name, config_dict, s_code, period, start_date, end_date, adjust, pause_time: float = default_pause_time):
-        if DEBUG_MODE:
-            logger.debug(f"Merging data for s_code: {s_code}")
-        _s_df = DgAkUtilFuncs.get_s_code_data(ak_func_name, config_dict, s_code, period, start_date, end_date, adjust, pause_time=pause_time)
-        _hfq_s_df = DgAkUtilFuncs.get_s_code_data(ak_func_name, config_dict, s_code, period, start_date, end_date, adjust, pause_time=pause_time)
-        _s_df.set_index('td', inplace=True)
-        _hfq_s_df.set_index('td', inplace=True)
-        _hfq_s_df = _hfq_s_df.add_suffix('_hfq')
-        _merged_df = pd.merge(_s_df, _hfq_s_df, left_index=True, right_index=True, how='outer')
-        if DEBUG_MODE:
-            logger.debug(f"Merged data for s_code: {s_code}, merged data shape: {_merged_df.shape}, first 5 rows: {_merged_df.head().to_dict(orient='records')}")
-        return _merged_df
+    # @staticmethod
+    # def merge_s_code_data(ak_func_name, config_dict, s_code, period, start_date, end_date, adjust, pause_time: float = default_pause_time):
+    #     if DEBUG_MODE:
+    #         logger.debug(f"Merging data for s_code: {s_code}")
+    #     _s_df = DgAkUtilFuncs.get_s_code_data(ak_func_name, config_dict, s_code, period, start_date, end_date, adjust, pause_time=pause_time)
+    #     _hfq_s_df = DgAkUtilFuncs.get_s_code_data(ak_func_name, config_dict, s_code, period, start_date, end_date, adjust, pause_time=pause_time)
+    #     _s_df.set_index('td', inplace=True)
+    #     _hfq_s_df.set_index('td', inplace=True)
+    #     _hfq_s_df = _hfq_s_df.add_suffix('_hfq')
+    #     _merged_df = pd.merge(_s_df, _hfq_s_df, left_index=True, right_index=True, how='outer')
+    #     if DEBUG_MODE:
+    #         logger.debug(f"Merged data for s_code: {s_code}, merged data shape: {_merged_df.shape}, first 5 rows: {_merged_df.head().to_dict(orient='records')}")
+    #     return _merged_df
 
-    @staticmethod
-    def get_all_merged_s_code_data(s_code_list, ak_func_name, config_dict, period, start_date, end_date, adjust, pause_time: float = default_pause_time):
-        if DEBUG_MODE:
-            logger.debug(f"Getting all merged data for {len(s_code_list)} stock codes.")
-        _len_s_code_list = len(s_code_list)
-        _df_result = pd.DataFrame()
-        for _index, _s_code in enumerate(s_code_list, start=1):
-            logger.info(f'({_index}/{_len_s_code_list}) downloading data with s_code={_s_code}')
-            _merge_s_code_df = DgAkUtilFuncs.merge_s_code_data(ak_func_name, config_dict, _s_code, period, start_date, end_date, adjust, pause_time=pause_time)
-            _df_result = pd.concat([_df_result, _merge_s_code_df], axis=0)
-        if DEBUG_MODE:
-            logger.debug(f"Total merged data shape: {_df_result.shape}, first 5 rows: {_df_result.head().to_dict(orient='records')}")
-        return _df_result
+    # @staticmethod
+    # def get_all_merged_s_code_data(s_code_list, ak_func_name, config_dict, period, start_date, end_date, adjust, pause_time: float = default_pause_time):
+    #     if DEBUG_MODE:
+    #         logger.debug(f"Getting all merged data for {len(s_code_list)} stock codes.")
+    #     _len_s_code_list = len(s_code_list)
+    #     _df_result = pd.DataFrame()
+    #     for _index, _s_code in enumerate(s_code_list, start=1):
+    #         logger.info(f'({_index}/{_len_s_code_list}) downloading data with s_code={_s_code}')
+    #         _merge_s_code_df = DgAkUtilFuncs.merge_s_code_data(ak_func_name, config_dict, _s_code, period, start_date, end_date, adjust, pause_time=pause_time)
+    #         _df_result = pd.concat([_df_result, _merge_s_code_df], axis=0)
+    #     if DEBUG_MODE:
+    #         logger.debug(f"Total merged data shape: {_df_result.shape}, first 5 rows: {_df_result.head().to_dict(orient='records')}")
+    #     return _df_result
 
     # endregion stock funcs
 
@@ -173,22 +207,22 @@ class DgAkUtilFuncs(AkUtilTools):
             logger.debug(f"Data saved to CSV at {_temp_csv_path}, length: {len(_ak_data_df)}, first 5 rows: {_ak_data_df.head().to_dict(orient='records')}")
         return _temp_csv_path
 
-    @staticmethod
-    def generate_dt_list(begin_dt, end_dt, dt_format='%Y-%m-%d', ascending=False):
-        _start = datetime.strptime(DgAkUtilFuncs.format_td10(begin_dt), '%Y-%m-%d')
-        _end = datetime.strptime(DgAkUtilFuncs.format_td10(end_dt), '%Y-%m-%d')
-        _date_list = []
-        if ascending:
-            while _start <= _end:
-                _date_list.append(_start.strftime(dt_format))
-                _start += timedelta(days=1)
-        else:
-            while _end >= _start:
-                _date_list.append(_end.strftime(dt_format))
-                _end -= timedelta(days=1)
-        if DEBUG_MODE:
-            logger.debug(f"Generated date list length: {len(_date_list)}, first 5 dates: {_date_list[:5]}")
-        return _date_list
+    # @staticmethod
+    # def generate_dt_list(begin_dt, end_dt, dt_format='%Y-%m-%d', ascending=False):
+    #     _start = datetime.strptime(DgAkUtilFuncs.format_td10(begin_dt), '%Y-%m-%d')
+    #     _end = datetime.strptime(DgAkUtilFuncs.format_td10(end_dt), '%Y-%m-%d')
+    #     _date_list = []
+    #     if ascending:
+    #         while _start <= _end:
+    #             _date_list.append(_start.strftime(dt_format))
+    #             _start += timedelta(days=1)
+    #     else:
+    #         while _end >= _start:
+    #             _date_list.append(_end.strftime(dt_format))
+    #             _end -= timedelta(days=1)
+    #     if DEBUG_MODE:
+    #         logger.debug(f"Generated date list length: {len(_date_list)}, first 5 dates: {_date_list[:5]}")
+    #     return _date_list
 
     @staticmethod
     def try_to_call(

@@ -135,28 +135,29 @@ def insert_code_name_to_db(code_name_list: list[tuple[str, str]]):
         if conn:
             PGEngine.release_conn(conn)
 
-def update_tracing_table(ak_func_name: str, period: str, i_code: str, last_td: str):
+def update_tracing_table_bulk(ak_func_name: str, period: str, updates):
     conn = None
     try:
         conn = PGEngine.get_conn()
         sql = f"""
             INSERT INTO {TRACING_TABLE_NAME} (ak_func_name, icode, period, last_td, create_time, update_time, host_name)
-            VALUES (%s, %s, %s, %s, NOW(), NOW(), %s)
+            VALUES %s
             ON CONFLICT (ak_func_name, icode, period) DO UPDATE 
             SET last_td = EXCLUDED.last_td, update_time = EXCLUDED.update_time, host_name = EXCLUDED.host_name;
         """
         hostname = os.getenv('HOSTNAME', socket.gethostname())
+        values = [(ak_func_name, i_code, period, last_td, datetime.now(), datetime.now(), hostname) for i_code, last_td in updates]
+
         with conn.cursor() as cursor:
-            cursor.execute(sql, (ak_func_name, i_code, period, last_td, hostname))
+            psycopg2.extras.execute_values(cursor, sql, values)
         conn.commit()
-        logger.info(f"Tracing data updated for {i_code} in {TRACING_TABLE_NAME}.")
+        logger.info(f"Tracing data updated for {len(updates)} records in {TRACING_TABLE_NAME}.")
     except Exception as e:
-        logger.error(f"Failed to update tracing table for {i_code}: {e}")
+        logger.error(f"Failed to update tracing table in bulk: {e}")
         raise AirflowException(e)
     finally:
         if conn:
             PGEngine.release_conn(conn)
-
 
 def prepare_arg_list(ak_func_name: str, period: str):
     conn = None
@@ -202,12 +203,14 @@ def process_batch_data(ak_func_name, period, combined_df, conn):
         raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
 
     # 将数据从 CSV 导入数据库
-    dguf.insert_data_from_csv(conn, temp_csv_path, f'ak_dg_{ak_func_name}_{period}')
+    dguf.insert_data_from_csv(conn, temp_csv_path, f'ak_dg_{ak_func_name}_{period}', task_cache_conn)
 
-    # 更新追踪数据
+
     last_td = combined_df['td'].max()
-    for i_code in combined_df['i_code'].unique():
-        update_tracing_table(ak_func_name, period, i_code, last_td)
+    updates = [(i_code, last_td) for i_code in combined_df['i_code'].unique()]
+
+    update_tracing_table_bulk(ak_func_name, period, updates)
+
 
 def process_index_data(ak_func_name: str, period: str):
     conn = None
@@ -274,11 +277,10 @@ def retry_failed_indexes(ak_func_name: str, period: str):
             logger.info("No failed indexes to retry.")
             return
 
-        failed_indexes = [index.decode('utf-8') for index in failed_indexes]
         logger.info(f"Failed indexes detected: {failed_indexes}")
 
         if failed_indexes:
-            formatted_failed_indexes = "\n".join(failed_indexes)
+            formatted_failed_indexes = "\n".join([str(index) for index in failed_indexes])
             raise AirflowException(f"Warning: There are failed indexes that need to be retried:\n{formatted_failed_indexes}")
 
     except Exception as e:
@@ -288,7 +290,8 @@ def retry_failed_indexes(ak_func_name: str, period: str):
 
 def generate_dag_name(index_func, period) -> str:
     period_mapping = {
-        'daily': '日线'
+        'daily': '日线',
+        'weekly': '周线'
     }
     source_mapping = {
         'index_zh_a_hist': '东方财富'
