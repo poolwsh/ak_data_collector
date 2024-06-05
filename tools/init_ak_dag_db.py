@@ -12,13 +12,13 @@ sys.path.append(project_root)
 
 pg_sql_hostname = "timescaledb"
 pg_sql_port = "5432"
-pg_sql_user = "postgres"
-pg_sql_password = "pi=3.14159"
+pg_sql_user = "postgres_user"
+pg_sql_password = "postgres_pw"
 pg_db_name='postgres'
 
 ak_data_hostname = "timescaledb"
 ak_data_port = "5432"
-ak_data_user = "ak_data"
+ak_data_user = "ak_data_user"
 ak_data_password = "ak_data_pw"
 ak_data_db_name='ak_data'
 
