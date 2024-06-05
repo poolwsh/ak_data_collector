@@ -1,4 +1,5 @@
 akshare
+yfinance
 numpy
 pandas
 psycopg2-binary
