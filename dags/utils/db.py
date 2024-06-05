@@ -1,9 +1,7 @@
 
 import redis
-from sqlalchemy import create_engine
-from sqlalchemy.engine.base import Connection as SQLAlchemyConnection
-import psycopg2.extensions
-import dags.utils.config as con
+from psycopg2 import pool
+from dags.utils.config import config as con
 from dags.utils.logger import logger
 
 class RedisEngine(object):
@@ -29,36 +27,36 @@ task_cache_conn = RedisEngine.get_connection(3)
 
 
 class PGEngine(object):
-    db_engine = create_engine(
-        'postgresql+psycopg2://{0}:{1}@{2}:{3}/{4}'.format(
-            con.ak_data_user, con.ak_data_password, con.ak_data_hostname, 
-            con.ak_data_port, con.ak_data_db_name
-        ), 
-        echo=True if con.DEBUG_MODE else False,
-        pool_size=20, 
-        max_overflow=50
+    pg_pool = pool.SimpleConnectionPool(
+        1,  # minconn
+        20, # maxconn
+        user=con.ak_data_user,
+        password=con.ak_data_password,
+        host=con.ak_data_hostname,
+        port=con.ak_data_port,
+        database=con.ak_data_db_name
     )
-    pg_conn = None
 
     @staticmethod
     def get_conn():
-        if PGEngine.pg_conn is None or PGEngine.pg_conn.closed:
-            try:
-                PGEngine.pg_conn = PGEngine.db_engine.connect()
+        try:
+            conn = PGEngine.pg_pool.getconn()
+            if conn:
                 logger.debug('create new postgresql connection')
-            except Exception as e:
-                logger.error(f"Error connecting to the database: {e}")
-                PGEngine.pg_conn = None
-        return PGEngine.pg_conn
+                return conn
+            else:
+                logger.error("Failed to get connection from pool")
+                return None
+        except Exception as e:
+            logger.error(f"Error connecting to the database: {e}")
+            return None
 
     @staticmethod
-    def get_psycopg2_conn(conn):
-        if isinstance(conn, SQLAlchemyConnection):
-            # If it's a SQLAlchemy connection, get the raw psycopg2 connection
-            return conn.connection.connection
-        elif isinstance(conn, psycopg2.extensions.connection):
-            # If it's already a psycopg2 connection, return it directly
-            return conn
-        else:
-            raise TypeError("Unsupported connection type")
+    def release_conn(conn):
+        try:
+            if conn:
+                PGEngine.pg_pool.putconn(conn)
+                logger.debug('PostgreSQL connection returned to pool')
+        except Exception as e:
+            logger.error(f"Error returning connection to the pool: {e}")
 

@@ -18,9 +18,10 @@ from datetime import date, datetime, timedelta
 from typing import Optional, Union
 from sqlalchemy.exc import SQLAlchemyError
 
-import utils.config as con
+
 from utils.ak_utils import AkUtilTools
 from utils.logger import logger
+from dags.dg_ak.utils.dg_ak_config import dgak_config as con
 
 from airflow.exceptions import AirflowException
 

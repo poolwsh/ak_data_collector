@@ -1,18 +1,10 @@
-
 from __future__ import annotations
 
 import os
 import sys
-from pathlib import Path
-current_path = Path(__file__).resolve().parent 
-project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..', '..'))
-print(project_root)
-# 将项目根目录添加到sys.path中
-sys.path.append(project_root)
-
-
 import socket
 import pandas as pd
+from pathlib import Path
 from datetime import timedelta, datetime
 from airflow.models.dag import DAG
 from airflow.exceptions import AirflowException
@@ -20,24 +12,19 @@ from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
 
 from dags.utils.db import PGEngine, task_cache_conn
-from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dguf
 from dags.utils.logger import logger
-import dags.utils.config as con
+from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dguf
+from dags.dg_ak.utils.dg_ak_config import dgak_config as con
 
-# 配置日志调试开关
-DEBUG_MODE = con.DEBUG_MODE
 
-# 配置数据库连接
-pg_conn = PGEngine.get_conn()
-logger.debug(PGEngine.db_engine)
-logger.debug(f'pg_conn={pg_conn}')
 
-# 配置路径
+
+
+current_path = Path(__file__).resolve().parent 
 config_path = current_path / 'ak_dg_s-zh-a_config.py'
 sys.path.append(config_path.parent.as_posix())
-ak_cols_config_dict =dguf.load_ak_cols_config(config_path.as_posix())
+ak_cols_config_dict = dguf.load_ak_cols_config(config_path.as_posix())
 
-# Redis keys 前缀
 ARG_LIST_CACHE_PREFIX = "ak_dg_s_zh_a_arg_list"
 STORE_LIST_CACHE_PREFIX = "ak_dg_s_zh_a_store_list"
 
@@ -45,57 +32,68 @@ TRACING_TABLE_NAME = 'ak_dg_tracing_s_zh_a'
 TRADE_DATE_TABLE_NAME = 'ak_dg_stock_zh_a_trade_date'
 STOCK_CODE_NAME_TABLE = 'ak_dg_stock_zh_a_code_name'
 
-# 定义昨天的日期、默认开始日期和批次大小
-default_end_date =dguf.format_td8(datetime.now()) # - timedelta(days=1)
+DEBUG_MODE = con.DEBUG_MODE
+default_end_date = dguf.format_td8(datetime.now())
 default_start_date = con.ZH_A_DEFAULT_START_DATE
-batch_size = 50  # 根据需求调整批次大小
-rollback_days = 15  # 回滚天数
+batch_size = 50 
+rollback_days = 15  
 
 def insert_code_name_to_db(code_name_list: list[tuple[str, str]]):
+    conn = None
     try:
-        with pg_conn.begin():
+        conn = PGEngine.get_conn()
+        with conn.cursor() as cursor:
             sql = f"""
                 INSERT INTO {STOCK_CODE_NAME_TABLE} (s_code, s_name, create_time, update_time)
                 VALUES (%s, %s, NOW(), NOW())
                 ON CONFLICT (s_code) DO UPDATE 
                 SET s_name = EXCLUDED.s_name, update_time = EXCLUDED.update_time;
             """
-            pg_conn.execute(sql, code_name_list)
+            cursor.executemany(sql, code_name_list)
+            conn.commit()
             logger.info(f"s_code and s_name inserted into {STOCK_CODE_NAME_TABLE} successfully.")
     except Exception as e:
         logger.error(f"Failed to insert s_code and s_name into {STOCK_CODE_NAME_TABLE}: {str(e)}")
         raise AirflowException(e)
-
-
+    finally:
+        if conn:
+            PGEngine.release_conn(conn)
 
 def prepare_arg_list(ak_func_name: str, period: str, adjust: str):
-    _tracing_df = dguf.get_tracing_data_df(pg_conn, TRACING_TABLE_NAME)
-    _current_tracing_df = _tracing_df[
-        (_tracing_df['ak_func_name'] == ak_func_name) &
-        (_tracing_df['period'] == period) &
-        (_tracing_df['adjust'] == adjust)
-    ]
-    _tracing_dict = dict(zip(_current_tracing_df['scode'].values, _current_tracing_df['last_td'].values))
+    conn = None
+    try:
+        conn = PGEngine.get_conn()
+        _tracing_df = dguf.get_tracing_data_df(conn, TRACING_TABLE_NAME)
+        _current_tracing_df = _tracing_df[
+            (_tracing_df['ak_func_name'] == ak_func_name) &
+            (_tracing_df['period'] == period) &
+            (_tracing_df['adjust'] == adjust)
+        ]
+        _tracing_dict = dict(zip(_current_tracing_df['scode'].values, _current_tracing_df['last_td'].values))
 
-    _s_code_name_list = dguf.get_s_code_name_list(task_cache_conn)
-    insert_code_name_to_db(_s_code_name_list)
-    
-    _arg_list = []
-    for _s_code, _s_name in _s_code_name_list:
-        _start_date = _tracing_dict.get(_s_code, default_start_date)
+        _s_code_name_list = dguf.get_s_code_name_list(task_cache_conn)
+        insert_code_name_to_db(_s_code_name_list)
+        
+        _arg_list = []
+        for _s_code, _s_name in _s_code_name_list:
+            _start_date = _tracing_dict.get(_s_code, default_start_date)
 
-        if _start_date != default_start_date:
-            _start_date = (datetime.strptime(str(_start_date), '%Y-%m-%d') - timedelta(days=rollback_days)).strftime('%Y-%m-%d')
-        _arg_list.append((_s_code, dguf.format_td8(_start_date), default_end_date))
+            if _start_date != default_start_date:
+                _start_date = (datetime.strptime(str(_start_date), '%Y-%m-%d') - timedelta(days=rollback_days)).strftime('%Y-%m-%d')
+            _arg_list.append((_s_code, dguf.format_td8(_start_date), default_end_date))
 
-    _redis_key = f"{ARG_LIST_CACHE_PREFIX}@{ak_func_name}@{period}@{adjust}"
-    dguf.write_list_to_redis(_redis_key, _arg_list, task_cache_conn)
-    logger.info(f"Argument list for {ak_func_name} with period={period} and adjust={adjust} has been prepared and cached.")
-
+        _redis_key = f"{ARG_LIST_CACHE_PREFIX}@{ak_func_name}@{period}@{adjust}"
+        dguf.write_list_to_redis(_redis_key, _arg_list, task_cache_conn)
+        logger.info(f"Argument list for {ak_func_name} with period={period} and adjust={adjust} has been prepared and cached.")
+    finally:
+        if conn:
+            PGEngine.release_conn(conn)
 
 def get_stock_data(ak_func_name: str, period: str, adjust: str):
-    logger.info(f"Starting to save data for {ak_func_name} with period={period} and adjust={adjust}")
+    conn = None
     try:
+        conn = PGEngine.get_conn()
+        logger.info(f"Starting to save data for {ak_func_name} with period={period} and adjust={adjust}")
         _redis_key = f"{ARG_LIST_CACHE_PREFIX}@{ak_func_name}@{period}@{adjust}"
         _arg_list = dguf.read_list_from_redis(_redis_key, task_cache_conn)
 
@@ -111,7 +109,8 @@ def get_stock_data(ak_func_name: str, period: str, adjust: str):
 
         # 清空表内容
         clear_table_sql = f"TRUNCATE TABLE ak_dg_{ak_func_name}_{period}_{adjust};"
-        pg_conn.execute(clear_table_sql)
+        conn.cursor().execute(clear_table_sql)
+        conn.commit()
         logger.info(f"Table ak_dg_{ak_func_name}_{period}_{adjust} has been cleared.")
 
         for _index, (_s_code, _start_date, _end_date) in enumerate(_arg_list):
@@ -138,7 +137,7 @@ def get_stock_data(ak_func_name: str, period: str, adjust: str):
                     logger.debug(f"Combined DataFrame columns for {ak_func_name}: {_combined_df.columns}")
 
                 _combined_df['s_code'] = _combined_df['s_code'].astype(str)
-                _combined_df = dguf.convert_columns(_combined_df, f'ak_dg_{ak_func_name}_{period}_{adjust}', pg_conn, task_cache_conn)
+                _combined_df = dguf.convert_columns(_combined_df, f'ak_dg_{ak_func_name}_{period}_{adjust}', conn, task_cache_conn)
 
                 if 'td' in _combined_df.columns:
                     _combined_df['td'] = pd.to_datetime(_combined_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
@@ -148,8 +147,7 @@ def get_stock_data(ak_func_name: str, period: str, adjust: str):
                     raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
 
                 # 将数据从 CSV 导入数据库
-                raw_conn = PGEngine.get_psycopg2_conn(pg_conn)  # 获取原生的 psycopg2 连接对象
-                dguf.insert_data_from_csv(raw_conn, _temp_csv_path, f'ak_dg_{ak_func_name}_{period}_{adjust}')
+                dguf.insert_data_from_csv(conn, _temp_csv_path, f'ak_dg_{ak_func_name}_{period}_{adjust}')
 
                 # 更新交易日期到 trade_date 表
                 _trade_dates = list(all_trade_dates)
@@ -158,10 +156,9 @@ def get_stock_data(ak_func_name: str, period: str, adjust: str):
                     VALUES (%s, NOW(), NOW())
                     ON CONFLICT (trade_date) DO NOTHING;
                 """
-                psycopg2_conn = PGEngine.get_psycopg2_conn(pg_conn)
-                with psycopg2_conn.cursor() as cursor:
+                with conn.cursor() as cursor:
                     cursor.executemany(_insert_date_sql, [(date,) for date in _trade_dates])
-                psycopg2_conn.commit()
+                conn.commit()
                 # 清空缓存
                 _all_data = []
                 all_trade_dates.clear()
@@ -169,17 +166,20 @@ def get_stock_data(ak_func_name: str, period: str, adjust: str):
     except Exception as e:
         logger.error(f"Failed to process data for {ak_func_name}: {str(e)}")
         raise AirflowException(e)
-
-
+    finally:
+        if conn:
+            PGEngine.release_conn(conn)
 
 def store_stock_data(ak_func_name: str, period: str, adjust: str):
-    logger.info(f"Starting data storage operations for {ak_func_name} with period={period} and adjust={adjust}")
-
+    conn = None
     try:
+        conn = PGEngine.get_conn()
+        logger.info(f"Starting data storage operations for {ak_func_name} with period={period} and adjust={adjust}")
+
         source_table = f'ak_dg_{ak_func_name}_{period}_{adjust}'
         store_table = f'ak_dg_{ak_func_name}_store_{period}_{adjust}'
         # Dynamically retrieve the column names from the table
-        columns =dguf.get_columns_from_table(pg_conn, source_table, task_cache_conn)
+        columns = dguf.get_columns_from_table(conn, source_table, task_cache_conn)
         column_names = [col[0] for col in columns]  # Extract only the column names
         columns_str = ', '.join(column_names)
         update_columns = ', '.join([f"{col} = EXCLUDED.{col}" for col in column_names if col not in ['s_code', 'td']])
@@ -191,8 +191,7 @@ def store_stock_data(ak_func_name: str, period: str, adjust: str):
             {update_columns}
             RETURNING s_code, td;
         """
-        raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
-        _inserted_rows =dguf.store_ak_data(raw_conn, ak_func_name, _insert_sql, truncate=False)
+        _inserted_rows = dguf.store_ak_data(conn, ak_func_name, _insert_sql, truncate=False)
         if DEBUG_MODE:
             logger.debug(f"Inserted rows for {ak_func_name}: {_inserted_rows}")
 
@@ -215,39 +214,43 @@ def store_stock_data(ak_func_name: str, period: str, adjust: str):
 
     except Exception as e:
         logger.error(f"Failed during data operations for {ak_func_name}: {str(e)}")
-        raw_conn.rollback()
+        conn.rollback()
         raise AirflowException(e)
-
-
+    finally:
+        if conn:
+            PGEngine.release_conn(conn)
 
 def update_tracing_date(ak_func_name: str, period: str, adjust: str):
-    _redis_key = f"{STORE_LIST_CACHE_PREFIX}@{ak_func_name}@{period}@{adjust}"
-    _stored_keys = dguf.read_list_from_redis(_redis_key, task_cache_conn)
-    if not _stored_keys:
-        logger.info(f"No keys to process for {ak_func_name}")
-        return
-
-    # 将日期字符串转换回 date 对象
-    _stored_keys = [(s_code, datetime.strptime(date_str, '%Y-%m-%d').date()) for s_code, date_str in _stored_keys]
-
-    _date_values = [(ak_func_name, _s_code, period, adjust, _date, datetime.now(), datetime.now(), os.getenv('HOSTNAME', socket.gethostname())) for _s_code, _date in _stored_keys]
-
-    _insert_sql = f"""
-        INSERT INTO {TRACING_TABLE_NAME} (ak_func_name, scode, period, adjust, last_td, create_time, update_time, host_name)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (ak_func_name, scode, period, adjust) DO UPDATE 
-        SET last_td = EXCLUDED.last_td, update_time = EXCLUDED.update_time;
-    """
+    conn = None
     try:
-        raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
-        raw_conn.executemany(_insert_sql, _date_values)
+        conn = PGEngine.get_conn()
+        _redis_key = f"{STORE_LIST_CACHE_PREFIX}@{ak_func_name}@{period}@{adjust}"
+        _stored_keys = dguf.read_list_from_redis(_redis_key, task_cache_conn)
+        if not _stored_keys:
+            logger.info(f"No keys to process for {ak_func_name}")
+            return
+
+        # 将日期字符串转换回 date 对象
+        _stored_keys = [(s_code, datetime.strptime(date_str, '%Y-%m-%d').date()) for s_code, date_str in _stored_keys]
+
+        _date_values = [(ak_func_name, _s_code, period, adjust, _date, datetime.now(), datetime.now(), os.getenv('HOSTNAME', socket.gethostname())) for _s_code, _date in _stored_keys]
+
+        _insert_sql = f"""
+            INSERT INTO {TRACING_TABLE_NAME} (ak_func_name, scode, period, adjust, last_td, create_time, update_time, host_name)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (ak_func_name, scode, period, adjust) DO UPDATE 
+            SET last_td = EXCLUDED.last_td, update_time = EXCLUDED.update_time;
+        """
+        with conn.cursor() as cursor:
+            cursor.executemany(_insert_sql, _date_values)
+        conn.commit()
         logger.info(f"Tracing data saved for {ak_func_name} on keys: {_stored_keys}")
     except Exception as e:
         logger.error(f"Failed to update tracing data for {ak_func_name}: {str(e)}")
         raise AirflowException(e)
-
-
-
+    finally:
+        if conn:
+            PGEngine.release_conn(conn)
 
 def generate_dag_name(stock_func, period, adjust) -> str:
     adjust_mapping = {

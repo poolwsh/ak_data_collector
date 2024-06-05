@@ -19,7 +19,7 @@ sys.path.append(project_root)
 from dags.da_ak.utils.da_ak_util_funcs import DaAkUtilFuncs as dauf
 from dags.utils.db import PGEngine, task_cache_conn
 from dags.utils.logger import logger
-import dags.utils.config as con
+from dags.da_ak.utils.da_ak_config import daak_config as con
 
 # 配置日志调试开关
 DEBUG_MODE = con.DEBUG_MODE

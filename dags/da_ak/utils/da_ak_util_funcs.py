@@ -9,7 +9,7 @@ print(project_root)
 sys.path.append(project_root)
 
 
-import utils.config as con
+from dags.da_ak.utils.da_ak_config import daak_config as con
 from utils.ak_utils import AkUtilTools
 from utils.logger import logger
 

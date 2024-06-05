@@ -41,6 +41,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     environment:
+      PYTHONPATH: /opt/airflow
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow_user:airflow_pw@timescaledb:5432/airflow_data
       AIRFLOW__CELERY__BROKER_URL: redis://:pi=3.14159@redis:6379/0

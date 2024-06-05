@@ -14,7 +14,7 @@ import psycopg2.extensions
 
 
 from utils.utils import UtilTools
-import utils.config as con
+from utils.config import config as con
 from utils.utils import UtilTools
 from utils.logger import logger
 

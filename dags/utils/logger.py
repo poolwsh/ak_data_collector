@@ -2,10 +2,9 @@
 import os
 import threading
 import logging
-import dags.utils.config as con
+from dags.utils.config import config as con
 from logging.handlers import RotatingFileHandler
 
-# 实现 singleton 装饰器
 def singleton(cls, *args, **kw):
     instances = {}
     def _singleton():
@@ -46,7 +45,7 @@ class TNLog(object):
         self.__loggers = {}
         logLevels = handlers.keys()
         console_log = logging.StreamHandler()
-        console_log.setFormatter(format_str)  # 设置屏幕上显示的格式
+        console_log.setFormatter(format_str) 
         for level in logLevels:
             logger = logging.getLogger(str(level))
             logger.addHandler(handlers[level])
@@ -55,39 +54,27 @@ class TNLog(object):
             self.__loggers.update({level: logger})
 
     def notset(self, message):
-        # message = self.getLogMessage("notset", message)
         self.__loggers[logging.NOTSET].info(message)
 
     def info(self, message):
-        # message = self.getLogMessage("info", message)
         self.__loggers[logging.INFO].info(message)
 
     def error(self, message):
-        # message = self.getLogMessage("error", message)
         self.__loggers[logging.ERROR].error(message)
 
     def warning(self, message):
-        # message = self.getLogMessage("warning", message)
         self.__loggers[logging.WARNING].warning(message)
 
     def debug(self, message):
-        # message = self.getLogMessage("debug", message)
         self.__loggers[logging.DEBUG].debug(message)
 
     def critical(self, message):
-        # message = self.getLogMessage("critical", message)
         self.__loggers[logging.CRITICAL].critical(message)
-
 
 @singleton
 class LogHelper(object):
     _instance_lock = threading.Lock()
     def __init__(self):
         self.logger = TNLog()
-
-class MQLogger(object):
-    def __init__(self):
-        # self.logger = PalsurClient('log')
-        pass
 
 logger = LogHelper().logger

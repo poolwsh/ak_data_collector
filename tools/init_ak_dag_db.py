@@ -5,10 +5,12 @@ import logging
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
-# 获取项目根目录，并将其添加到 sys.path
+# # 获取项目根目录，并将其添加到 sys.path
 current_path = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_path, '..', 'dags'))
 sys.path.append(project_root)
+
+from dags.utils.config import config as con
 
 pg_sql_hostname = "timescaledb"
 pg_sql_port = "5432"
@@ -16,11 +18,11 @@ pg_sql_user = "postgres"
 pg_sql_password = "postgres_pw"
 pg_db_name='postgres'
 
-ak_data_hostname = "timescaledb"
-ak_data_port = "5432"
-ak_data_user = "ak_data_user"
-ak_data_password = "ak_data_pw"
-ak_data_db_name='ak_data'
+# ak_data_hostname = "timescaledb"
+# ak_data_port = "5432"
+# ak_data_user = "ak_data_user"
+# ak_data_password = "ak_data_pw"
+# ak_data_db_name='ak_data'
 
 # 配置日志记录
 logging.basicConfig(level=logging.INFO)
@@ -58,27 +60,27 @@ def create_ak_data_database():
 
         # 如果 RECREATE_DB 为 True，删除并重建数据库
         if RECREATE_DB:
-            conn.execute(f"DROP DATABASE IF EXISTS {ak_data_db_name}")
-            logger.info(f"Database '{ak_data_db_name}' dropped successfully.")
+            conn.execute(f"DROP DATABASE IF EXISTS {con.ak_data_db_name}")
+            logger.info(f"Database '{con.ak_data_db_name}' dropped successfully.")
 
         # 检查 ak_data 数据库是否存在
-        result = conn.execute(f"SELECT 1 FROM pg_database WHERE datname = '{ak_data_db_name}'")
+        result = conn.execute(f"SELECT 1 FROM pg_database WHERE datname = '{con.ak_data_db_name}'")
         exists = result.fetchone()
         if not exists:
             # 如果 ak_data 数据库不存在，创建它
-            conn.execute(f"CREATE DATABASE {ak_data_db_name}")
-            logger.info(f"Database '{ak_data_db_name}' created successfully.")
+            conn.execute(f"CREATE DATABASE {con.ak_data_db_name}")
+            logger.info(f"Database '{con.ak_data_db_name}' created successfully.")
         else:
-            logger.info(f"Database '{ak_data_db_name}' already exists.")
+            logger.info(f"Database '{con.ak_data_db_name}' already exists.")
         conn.close()
         
         # 创建数据库用户和权限
-        ak_data_engine = create_engine(f'postgresql+psycopg2://{pg_sql_user}:{pg_sql_password}@{ak_data_hostname}:{ak_data_port}/{ak_data_db_name}', isolation_level='AUTOCOMMIT')
+        ak_data_engine = create_engine(f'postgresql+psycopg2://{pg_sql_user}:{pg_sql_password}@{con.ak_data_hostname}:{con.ak_data_port}/{con.ak_data_db_name}', isolation_level='AUTOCOMMIT')
         ak_data_conn = ak_data_engine.connect()
-        ak_data_conn.execute(f"DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '{ak_data_user}') THEN CREATE USER {ak_data_user} WITH PASSWORD '{ak_data_password}'; END IF; END $$;")
-        ak_data_conn.execute(f"GRANT ALL PRIVILEGES ON DATABASE {ak_data_db_name} TO {ak_data_user}")
-        ak_data_conn.execute(f"GRANT ALL PRIVILEGES ON SCHEMA public TO {ak_data_user}")
-        logger.info(f"User '{ak_data_user}' created and granted privileges.")
+        ak_data_conn.execute(f"DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '{con.ak_data_user}') THEN CREATE USER {con.ak_data_user} WITH PASSWORD '{con.ak_data_password}'; END IF; END $$;")
+        ak_data_conn.execute(f"GRANT ALL PRIVILEGES ON DATABASE {con.ak_data_db_name} TO {con.ak_data_user}")
+        ak_data_conn.execute(f"GRANT ALL PRIVILEGES ON SCHEMA public TO {con.ak_data_user}")
+        logger.info(f"User '{con.ak_data_user}' created and granted privileges.")
         ak_data_conn.close()
         
     except SQLAlchemyError as e:
@@ -104,7 +106,7 @@ def main():
     create_ak_data_database()
 
     # 获取数据库连接
-    ak_data_engine = create_engine(f'postgresql+psycopg2://{ak_data_user}:{ak_data_password}@{ak_data_hostname}:{ak_data_port}/{ak_data_db_name}')
+    ak_data_engine = create_engine(f'postgresql+psycopg2://{con.ak_data_user}:{con.ak_data_password}@{con.ak_data_hostname}:{con.ak_data_port}/{con.ak_data_db_name}')
     conn = ak_data_engine.connect()
 
     # 获取所有 SQL 文件

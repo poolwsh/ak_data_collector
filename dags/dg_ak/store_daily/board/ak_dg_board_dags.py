@@ -14,7 +14,7 @@ from datetime import timedelta, datetime
 from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dguf
 from dags.utils.db import PGEngine, task_cache_conn
 from dags.utils.logger import logger
-import dags.utils.config as con
+from dags.dg_ak.utils.dg_ak_config import dgak_config as con
 
 
 from airflow.exceptions import AirflowException

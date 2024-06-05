@@ -2,6 +2,7 @@ FROM apache/airflow:2.9.1-python3.12
 
 # Set environment variables
 ENV AIRFLOW_HOME=/opt/airflow
+ENV PYTHONPATH=/opt/airflow:$PYTHONPATH
 
 # Copy requirements.txt and install Python packages with increased timeout
 COPY tools/requirements.txt .
