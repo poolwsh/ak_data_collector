@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-psql -v ON_ERROR_STOP=1 --username "postgres_user" <<-EOSQL
+psql -v ON_ERROR_STOP=1 --username "postgres" <<-EOSQL
     CREATE USER airflow_user WITH PASSWORD 'airflow_pw';
     CREATE DATABASE airflow_data;
     GRANT ALL PRIVILEGES ON DATABASE airflow_data TO airflow_user;

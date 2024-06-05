@@ -4,7 +4,7 @@ redis_hostname='redis'
 redis_port=6379
 
 ak_data_hostname = "timescaledb"
-ak_data_port = "25432"
+ak_data_port = "5432"
 ak_data_user = "ak_data_user"
 ak_data_password = "ak_data_pw"
 ak_data_db_name='ak_data'
