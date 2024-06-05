@@ -12,6 +12,7 @@ from airflow.models.dag import DAG
 from airflow.exceptions import AirflowException
 from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
+import psycopg2.extras
 
 from dags.utils.db import PGEngine, task_cache_conn
 from dags.utils.logger import logger
@@ -32,7 +33,7 @@ INDEX_CODE_NAME_TABLE = 'ak_dg_index_zh_a_code_name'
 DEBUG_MODE = con.DEBUG_MODE
 DEFAULT_END_DATE = dguf.format_td8(datetime.now())
 DEFAULT_START_DATE = con.ZH_A_DEFAULT_START_DATE
-BATCH_SIZE = 50000  # 处理的数据总行数阈值
+BATCH_SIZE = 5000  # 处理的数据总行数阈值
 ROLLBACK_DAYS = 15  # 回滚天数
 
 def get_i_code_name_list(redis_conn: redis.Redis, pg_conn, ttl: int = 60 * 60):
@@ -242,13 +243,15 @@ def process_index_data(ak_func_name: str, period: str):
                 if not index_data_df.empty:
                     all_data.append(index_data_df)
                     total_rows += len(index_data_df)
+                    if DEBUG_MODE:
+                        logger.debug(f'i_code={i_code}, len(index_data_df)={len(index_data_df)}, len(all_data)={len(all_data)}, total_rows={total_rows}')
                 else:
                     failed_indexes.append(arg_list[index])
 
                 # 如果达到批次大小，处理并清空缓存
                 if total_rows >= BATCH_SIZE or (index + 1) == total_codes:
-                    combined_df = pd.concat(all_data, ignore_index=True)
-                    process_batch_data(ak_func_name, period, combined_df, conn)
+                    _combined_df = pd.concat(all_data, ignore_index=True)
+                    process_batch_data(ak_func_name, period, _combined_df, conn)
                     # 清空缓存
                     all_data = []
                     total_rows = 0
