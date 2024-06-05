@@ -44,7 +44,9 @@ docker-compose exec airflow airflow users create \
 
 ## run init shell
 ```shell
-python init_ak_dag_db.py
+docker exec -it  docker_airflow_1 sh
+python /opt/airflow/tools/init_ak_dag_db.py
+python /opt/airflow/dags/dg_ak/store_daily/s-zh-a/init_ak_dg_s_zh_a.py
 ```
 
 ## run airflow
