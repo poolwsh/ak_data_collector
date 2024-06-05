@@ -46,3 +46,15 @@ CREATE TABLE ak_dg_tracing_s_zh_a (
     PRIMARY KEY (ak_func_name, scode, period, adjust)
 );
 
+DROP TABLE IF EXISTS ak_dg_tracing_i_zh_a;
+CREATE TABLE ak_dg_tracing_i_zh_a (
+    ak_func_name VARCHAR NOT NULL,
+    icode VARCHAR NOT NULL,
+    period VARCHAR NOT NULL,
+    last_td DATE,
+    create_time TIMESTAMP,
+    update_time TIMESTAMP,
+    host_name VARCHAR,
+    PRIMARY KEY (ak_func_name, icode, period)
+);
+

@@ -442,10 +442,12 @@ class DgAkUtilFuncs(AkUtilTools):
         _query = f"SELECT * FROM {tracing_table_name};"
         if DEBUG_MODE:
             logger.debug(f"Executing query to get tracing data: {_query}")
+        
+        _cursor = pg_conn.cursor()
         try:
-            result = pg_conn.execute(_query)
-            rows = result.fetchall()
-            columns = result.keys()
+            _cursor.execute(_query)
+            rows = _cursor.fetchall()
+            columns = [desc[0] for desc in _cursor.description]
             _df = pd.DataFrame(rows, columns=columns)
             logger.info(f"Data retrieved from {tracing_table_name} successfully.")
             if DEBUG_MODE:
@@ -454,6 +456,8 @@ class DgAkUtilFuncs(AkUtilTools):
         except SQLAlchemyError as _e:
             logger.error(f"Failed to retrieve data from {tracing_table_name}: {_e}")
             raise _e
+        finally:
+            _cursor.close()
 
     @staticmethod
     def generate_date_list(start_date, end_date, ascending=True):

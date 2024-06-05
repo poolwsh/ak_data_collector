@@ -1,5 +1,3 @@
-
-
 import os
 import json
 import redis
@@ -12,12 +10,9 @@ from airflow.exceptions import AirflowException
 from typing import Optional
 import psycopg2.extensions
 
-
 from utils.utils import UtilTools
 from utils.config import config as con
-from utils.utils import UtilTools
 from utils.logger import logger
-
 
 # Logger debug switch
 DEBUG_MODE = con.DEBUG_MODE
@@ -32,7 +27,10 @@ class AkUtilTools(UtilTools):
             _df = AkUtilTools.read_df_from_redis(con.STOCK_A_REALTIME_KEY, redis_conn)
             logger.info('Read stock real-time data from Redis successfully.')
             if DEBUG_MODE:
-                logger.debug(f"Stock codes list length: {len(_df['s_code'])}, first 5 codes: {_df['s_code'].tolist()[:5]}")
+                logger.debug(f"Stock codes list length: {len(_df['s_code'])}")
+                logger.debug("First 5 codes:")
+                for code in _df['s_code'].tolist()[:5]:
+                    logger.debug(code)
             return _df['s_code']
         except Exception as _e:
             logger.warning(f"Failed to read stock real-time data from Redis: {_e}")
@@ -43,7 +41,10 @@ class AkUtilTools(UtilTools):
                     _df['s_code'] = _df['s_code'].astype(str)
                     AkUtilTools.write_df_to_redis(con.STOCK_A_REALTIME_KEY, _df, redis_conn, ttl)
                     if DEBUG_MODE:
-                        logger.debug(f"Fetched and cached stock codes list length: {len(_df['s_code'])}, first 5 codes: {_df['s_code'].tolist()[:5]}")
+                        logger.debug(f"Fetched and cached stock codes list length: {len(_df['s_code'])}")
+                        logger.debug("First 5 codes:")
+                        for code in _df['s_code'].tolist()[:5]:
+                            logger.debug(code)
                     return _df['s_code']
                 else:
                     logger.error("Failed to fetch or process data from the source.")
@@ -61,7 +62,10 @@ class AkUtilTools(UtilTools):
             if _df is not None:
                 logger.info('Read stock real-time data from Redis successfully.')
                 if DEBUG_MODE:
-                    logger.debug(f"Stock codes and names list length: {len(_df)}, first 5: {_df[['s_code', 's_name']].values.tolist()[:5]}")
+                    logger.debug(f"Stock codes and names list length: {len(_df)}")
+                    logger.debug("First 5:")
+                    for item in _df[['s_code', 's_name']].values.tolist()[:5]:
+                        logger.debug(item)
                 return _df[['s_code', 's_name']].values.tolist()
             else:
                 logger.warning(f"No data found in Redis for key: {con.STOCK_A_REALTIME_KEY}")
@@ -76,7 +80,10 @@ class AkUtilTools(UtilTools):
                 _df['s_code'] = _df['s_code'].astype(str)
                 AkUtilTools.write_df_to_redis(con.STOCK_A_REALTIME_KEY, _df, redis_conn, ttl)
                 if DEBUG_MODE:
-                    logger.debug(f"Fetched and cached stock codes and names list length: {len(_df)}, first 5: {_df[['s_code', 's_name']].values.tolist()[:5]}")
+                    logger.debug(f"Fetched and cached stock codes and names list length: {len(_df)}")
+                    logger.debug("First 5:")
+                    for item in _df[['s_code', 's_name']].values.tolist()[:5]:
+                        logger.debug(item)
                 return _df[['s_code', 's_name']].values.tolist()
             else:
                 logger.error("Failed to fetch or process data from the source.")
@@ -84,7 +91,6 @@ class AkUtilTools(UtilTools):
         except Exception as _inner_e:
             logger.error(f"Error while fetching or writing data: {_inner_e}")
             raise  # 重新抛出异常或处理错误
-
 
     @staticmethod
     def save_data_to_csv(df, filename, dir_path=con.CACHE_ROOT, include_header=True):
@@ -97,7 +103,9 @@ class AkUtilTools(UtilTools):
             df.to_csv(_file_path, index=False, header=include_header)
             logger.info(f"Data saved to CSV at {_file_path}")
             if DEBUG_MODE:
-                logger.debug(f"CSV data length: {len(df)}, first 5 rows: {df.head().to_dict(orient='records')}")
+                logger.debug(f"CSV data length: {len(df)}")
+                logger.debug("First 5 rows:")
+                logger.debug(df.head())
             return _file_path
         except Exception as _e:
             logger.error(f"Failed to save data to CSV: {_e}")
@@ -105,22 +113,64 @@ class AkUtilTools(UtilTools):
 
 
     @staticmethod
-    def insert_data_from_csv(conn, csv_path, table_name):
+    def insert_data_from_csv(conn, csv_path, table_name, redis_conn: redis.Redis):
         assert isinstance(conn, psycopg2.extensions.connection)
         if not os.path.exists(csv_path):
             logger.error("CSV file does not exist.")
             return
+
+        temp_table_name = f"{table_name}_temp"
+
         try:
-            with open(csv_path, 'r') as _file:
-                _copy_sql = f"COPY {table_name} FROM STDIN WITH CSV HEADER DELIMITER ','"
-                with conn.cursor() as _cursor:
+            with conn.cursor() as _cursor:
+                # 动态获取正式表的列名和类型
+                columns = AkUtilTools.get_columns_from_table(conn, table_name, redis_conn)
+
+                # 检查临时表是否存在，如果不存在则创建
+                _cursor.execute(f"""
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM information_schema.tables
+                        WHERE table_name = '{temp_table_name}'
+                    );
+                """)
+                temp_table_exists = _cursor.fetchone()[0]
+
+                if not temp_table_exists:
+                    # 创建临时表
+                    columns_def = ", ".join([f"{col[0]} {col[1]}" for col in columns])
+                    _cursor.execute(f"CREATE TABLE {temp_table_name} ({columns_def})")
+
+                # 清空临时表
+                _cursor.execute(f"TRUNCATE TABLE {temp_table_name}")
+
+                # 把csv文件放入临时表
+                with open(csv_path, 'r') as _file:
+                    _copy_sql = f"COPY {temp_table_name} FROM STDIN WITH CSV HEADER DELIMITER ','"
                     _cursor.copy_expert(sql=_copy_sql, file=_file)
+
+                # 动态生成 ON CONFLICT 子句
+                conflict_columns = [col[0] for col in columns if col[0] in ['s_code', 'td']]
+                conflict_target = ", ".join(conflict_columns)
+                update_columns = ", ".join([f"{col[0]} = EXCLUDED.{col[0]}" for col in columns if col[0] not in conflict_columns])
+
+                # 把数据从临时表抄写如正式表，如果有冲突用新数据覆盖老数据
+                insert_sql = f"""
+                INSERT INTO {table_name}
+                SELECT * FROM {temp_table_name}
+                ON CONFLICT ({conflict_target}) DO UPDATE SET
+                    {update_columns}
+                """
+                _cursor.execute(insert_sql)
+
                 conn.commit()
                 logger.info(f"Data from {csv_path} successfully loaded into {table_name}.")
         except Exception as _e:
             conn.rollback()
             logger.error(f"Failed to load data from CSV: {_e}")
             raise
+
+
 
     @staticmethod
     def get_columns_from_table(pg_conn, table_name, redis_conn: redis.Redis, ttl: int = con.DEFAULT_REDIS_TTL):
@@ -134,7 +184,10 @@ class AkUtilTools(UtilTools):
                 _columns = json.loads(_cached_columns)
                 logger.info(f"Retrieved column names and types for table '{table_name}' from Redis.")
                 if DEBUG_MODE:
-                    logger.debug(f"Cached columns length: {len(_columns)}, first 5 columns: {_columns[:5]}")
+                    logger.debug(f"Cached columns length: {len(_columns)}")
+                    logger.debug("First 5 columns:")
+                    for column in _columns[:5]:
+                        logger.debug(column)
                 return _columns
         except Exception as _e:
             logger.warning(f"Failed to read column names and types from Redis for table '{table_name}': {_e}")
@@ -147,20 +200,28 @@ class AkUtilTools(UtilTools):
                 WHERE table_name = %s 
                 ORDER BY ordinal_position
             """
-            result = pg_conn.execute(query, (table_name,))
-            _columns = [(row['column_name'], row['data_type']) for row in result]
-            try:
-                redis_conn.setex(_redis_key, ttl, json.dumps(_columns))
-                logger.info(f"Retrieved column names and types for table '{table_name}' from PostgreSQL and cached in Redis.")
-                if DEBUG_MODE:
-                    logger.debug(f"Columns for table {table_name} length: {len(_columns)}, first 5 columns: {_columns[:5]}")
-            except Exception as _e:
-                logger.warning(f"Failed to cache column names and types in Redis for table '{table_name}': {_e}")
+            with pg_conn.cursor() as cursor:
+                cursor.execute(query, (table_name,))
+                result = cursor.fetchall()
+                _columns = [(row[0], row[1]) for row in result]
+                if not _columns:
+                    raise ValueError(f"No columns found for table '{table_name}'")
+
+                try:
+                    redis_conn.setex(_redis_key, ttl, json.dumps(_columns))
+                    logger.info(f"Retrieved column names and types for table '{table_name}' from PostgreSQL and cached in Redis.")
+                    if DEBUG_MODE:
+                        logger.debug(f"Columns for table {table_name} length: {len(_columns)}")
+                        logger.debug("First 5 columns:")
+                        for column in _columns[:5]:
+                            logger.debug(column)
+                except Exception as _e:
+                    logger.warning(f"Failed to cache column names and types in Redis for table '{table_name}': {_e}")
         except Exception as _e:
             logger.error(f"Error fetching column names and types from table '{table_name}': {_e}")
+            raise AirflowException(f"Error fetching column names and types from table '{table_name}': {_e}")
 
         return _columns
-
 
 
     @staticmethod
@@ -171,31 +232,28 @@ class AkUtilTools(UtilTools):
         if _columns is None or len(_columns) < 1:
             raise AirflowException(f"Can't find columns using table_name {table_name}")
 
-        # 提取列名和类型
         column_names = [col[0] for col in _columns]
         column_types = {col[0]: col[1] for col in _columns}
 
         if DEBUG_MODE:
             logger.debug('column_names')
             logger.debug(column_names)
-        # 根据列名对 DataFrame 进行筛选
-        df = df[column_names]
 
-        # 根据类型信息进行转换
+        df = df[column_names].copy()
+
         for col, col_type in column_types.items():
             if col_type in ['bigint', 'integer']:
-                df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')  # 使用 Pandas 的整数类型
+                df.loc[:, col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')  
             elif col_type in ['decimal', 'numeric']:
-                df[col] = pd.to_numeric(df[col], errors='coerce')  # 将无法转换的值转换为 NaN
+                df.loc[:, col] = pd.to_numeric(df[col], errors='coerce')  
             elif col_type == 'boolean':
-                df[col] = df[col].astype(bool)
+                df.loc[:, col] = df[col].astype(bool)
             elif col_type == 'date':
-                df[col] = pd.to_datetime(df[col], errors='coerce').dt.date
+                df.loc[:, col] = pd.to_datetime(df[col], errors='coerce').dt.date
             elif col_type == 'timestamp':
-                df[col] = pd.to_datetime(df[col], errors='coerce')
+                df.loc[:, col] = pd.to_datetime(df[col], errors='coerce')
 
         return df
-
 
 
 # region cache redis
@@ -211,7 +269,9 @@ class AkUtilTools(UtilTools):
                 _df = pd.read_json(BytesIO(_data_json), dtype=str)
                 logger.info(f"DataFrame retrieved from Redis for key: {key}")
                 if DEBUG_MODE:
-                    logger.debug(f"DataFrame length: {len(_df)}, first 5 rows: {_df.head().to_dict(orient='records')}")
+                    logger.debug(f"DataFrame length: {len(_df)}")
+                    logger.debug("First 5 rows:")
+                    logger.debug(_df.head())
                 return _df
             else:
                 logger.warning(f"No data found in Redis for key: {key}")
@@ -227,7 +287,9 @@ class AkUtilTools(UtilTools):
             conn.setex(key, ttl, _data_json)
             logger.info(f"DataFrame written to Redis under key: {key} with TTL {ttl} seconds.")
             if DEBUG_MODE:
-                logger.debug(f"DataFrame length: {len(df)}, first 5 rows: {df.head().to_dict(orient='records')}")
+                logger.debug(f"DataFrame length: {len(df)}")
+                logger.debug("First 5 rows:")
+                logger.debug(df.head())
         except Exception as _e:
             _error_msg = f"Error writing DataFrame to Redis for key: {key}. Traceback: {traceback.format_exc()}"
             logger.error(_error_msg)
@@ -242,7 +304,10 @@ class AkUtilTools(UtilTools):
             conn.setex(key, ttl, _data_json)
             logger.info(f"List written to Redis under key: {key} with TTL {ttl} seconds.")
             if DEBUG_MODE:
-                logger.debug(f"List length: {len(_data_list)}, first 5 items: {_data_list[:5]}")
+                logger.debug(f"List length: {len(_data_list)}")
+                logger.debug("First 5 items:")
+                for item in _data_list[:5]:
+                    logger.debug(item)
         except Exception as _e:
             logger.error(f"Error writing list to Redis: {str(_e)}")
             raise AirflowException(f"Error writing list to Redis: {str(_e)}")
@@ -256,7 +321,10 @@ class AkUtilTools(UtilTools):
                 _data_list = [datetime.strptime(item, '%Y-%m-%d').date() if len(item) == 10 else item for item in _data_list]
                 logger.info(f"List retrieved from Redis for key: {key}")
                 if DEBUG_MODE:
-                    logger.debug(f"List length: {len(_data_list)}, first 5 items: {_data_list[:5]}")
+                    logger.debug(f"List length: {len(_data_list)}")
+                    logger.debug("First 5 items:")
+                    for item in _data_list[:5]:
+                        logger.debug(item)
                 return _data_list
             else:
                 logger.warning(f"No data found in Redis for key: {key}")
