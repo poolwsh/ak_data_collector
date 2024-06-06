@@ -194,8 +194,7 @@ class AkUtilTools(UtilTools):
                 logger.info(f"Retrieved column names and types for table '{table_name}' from Redis.")
                 if DEBUG_MODE:
                     logger.debug(f"Cached columns length: {len(_columns)}")
-                    logger.debug("First 5 columns:")
-                    for column in _columns[:5]:
+                    for column in _columns:
                         logger.debug(column)
                 return _columns
         except Exception as _e:
@@ -221,8 +220,7 @@ class AkUtilTools(UtilTools):
                     logger.info(f"Retrieved column names and types for table '{table_name}' from PostgreSQL and cached in Redis.")
                     if DEBUG_MODE:
                         logger.debug(f"Columns for table {table_name} length: {len(_columns)}")
-                        logger.debug("First 5 columns:")
-                        for column in _columns[:5]:
+                        for column in _columns:
                             logger.debug(column)
                 except Exception as _e:
                     logger.warning(f"Failed to cache column names and types in Redis for table '{table_name}': {_e}")

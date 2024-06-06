@@ -14,6 +14,7 @@ class Config:
         self.DEFAULT_EMAIL = "poolwsh@163.com"
         self.DEFAULT_OWNER = "poolwsh"
         self.DEFAULT_RETRY_DELAY = 30  # in minutes
+        self.RETRIES = 1
 
         self.DEBUG_MODE = True
 
