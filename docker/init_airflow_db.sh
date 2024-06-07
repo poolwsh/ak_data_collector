@@ -8,4 +8,3 @@ psql -v ON_ERROR_STOP=1 --username "postgres" <<-EOSQL
     \c airflow_data
     GRANT ALL ON SCHEMA public TO airflow_user;
 EOSQL
-

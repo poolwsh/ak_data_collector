@@ -38,13 +38,13 @@ services:
 
   airflow:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: .
+      dockerfile: Dockerfile
     environment:
       PYTHONPATH: /opt/airflow
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow_user:airflow_pw@timescaledb:5432/airflow_data
-      AIRFLOW__CELERY__BROKER_URL: redis://:pi=3.14159@redis:6379/0
+      AIRFLOW__CELERY__BROKER_URL: redis://:redis_pw@redis:6379/0
       AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow_user:airflow_pw@timescaledb:5432/airflow_data
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
       AIRFLOW__WEBSERVER__SECRET_KEY: 'YOUR_GENERATED_SECRET_KEY'

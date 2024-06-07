@@ -5,16 +5,10 @@ rem Set the USERPROFILE environment variable
 set USERPROFILE=%USERPROFILE%
 
 rem Define the required directories
-set directories=(
-    "%USERPROFILE%\airflow_data\log"
-    "%USERPROFILE%\airflow_data\cache"
-    "%USERPROFILE%\airflow_data\db\redis\config"
-    "%USERPROFILE%\airflow_data\db\redis\data"
-    "%USERPROFILE%\airflow_data\db\timescaledb\data"
-)
+set directories=%USERPROFILE%\airflow_data\log %USERPROFILE%\airflow_data\cache %USERPROFILE%\airflow_data\db\redis\config %USERPROFILE%\airflow_data\db\redis\data %USERPROFILE%\airflow_data\db\timescaledb\data
 
 rem Create the directories if they don't exist
-for %%d in %directories% do (
+for %%d in (%directories%) do (
     if not exist "%%d" (
         echo Creating directory: %%d
         mkdir "%%d"
