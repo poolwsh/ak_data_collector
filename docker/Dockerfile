@@ -6,7 +6,7 @@ ENV PYTHONPATH=/opt/airflow:$PYTHONPATH
 
 # Copy tools and install Python packages with increased timeout
 COPY tools/ /opt/airflow/tools/
-RUN pip install --no-cache-dir --timeout=1000 -r ./tools/requirements.txt
+RUN pip install --no-cache-dir --timeout=1000 -r /opt/airflow/tools/requirements.txt
 
 # Copy dags
 COPY dags/ $AIRFLOW_HOME/dags/
