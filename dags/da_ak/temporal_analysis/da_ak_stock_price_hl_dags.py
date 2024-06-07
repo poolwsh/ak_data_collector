@@ -29,9 +29,9 @@ pg_conn = PGEngine.get_conn()
 
 
 # 定义常量
-PRICE_HL_TABLE_NAME = 'ak_da_stock_price_hl_store'
-TEMP_PRICE_HL_TABLE_NAME = 'ak_da_stock_price_hl'
-TRACING_TABLE_NAME = 'ak_da_tracing_stock_price_hl'
+PRICE_HL_TABLE_NAME = 'da_ak_stock_price_hl_store'
+TEMP_PRICE_HL_TABLE_NAME = 'da_ak_stock_price_hl'
+TRACING_TABLE_NAME = 'da_ak_tracing_stock_price_hl'
 MIN_INTERVAL = 3
 NONE_RESULT = 'NULL'
 ROUND_N = 5

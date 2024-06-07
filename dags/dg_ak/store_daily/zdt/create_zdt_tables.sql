@@ -1,5 +1,5 @@
-DROP TABLE IF EXISTS ak_dg_stock_zt_pool_dtgc_em;
-CREATE TABLE ak_dg_stock_zt_pool_dtgc_em (
+DROP TABLE IF EXISTS dg_ak_stock_zt_pool_dtgc_em;
+CREATE TABLE dg_ak_stock_zt_pool_dtgc_em (
     td DATE NOT NULL,
     s_code VARCHAR(20) NOT NULL,
     s_name VARCHAR(100),
@@ -20,8 +20,8 @@ CREATE TABLE ak_dg_stock_zt_pool_dtgc_em (
 );
 
 
-DROP TABLE IF EXISTS ak_dg_stock_zt_pool_em;
-CREATE TABLE ak_dg_stock_zt_pool_em (
+DROP TABLE IF EXISTS dg_ak_stock_zt_pool_em;
+CREATE TABLE dg_ak_stock_zt_pool_em (
     td DATE NOT NULL,               -- 交易日期，作为主键的第一部分
     s_code VARCHAR(20) NOT NULL,    -- 股票代码，为主键的第二部分
     s_name VARCHAR(100),
@@ -44,8 +44,8 @@ CREATE TABLE ak_dg_stock_zt_pool_em (
 
 
 
-DROP TABLE IF EXISTS ak_dg_stock_zt_pool_previous_em;
-CREATE TABLE ak_dg_stock_zt_pool_previous_em (
+DROP TABLE IF EXISTS dg_ak_stock_zt_pool_previous_em;
+CREATE TABLE dg_ak_stock_zt_pool_previous_em (
     td DATE NOT NULL,
     s_code VARCHAR(20) NOT NULL,
     s_name VARCHAR(100),
@@ -67,8 +67,8 @@ CREATE TABLE ak_dg_stock_zt_pool_previous_em (
 
 
 
-DROP TABLE IF EXISTS ak_dg_stock_zt_pool_strong_em;
-CREATE TABLE ak_dg_stock_zt_pool_strong_em (
+DROP TABLE IF EXISTS dg_ak_stock_zt_pool_strong_em;
+CREATE TABLE dg_ak_stock_zt_pool_strong_em (
     td DATE NOT NULL,
     s_code VARCHAR(20) NOT NULL,
     s_name VARCHAR(100),
@@ -90,8 +90,8 @@ CREATE TABLE ak_dg_stock_zt_pool_strong_em (
 
 
 
-DROP TABLE IF EXISTS ak_dg_stock_zt_pool_sub_new_em;
-CREATE TABLE ak_dg_stock_zt_pool_sub_new_em (
+DROP TABLE IF EXISTS dg_ak_stock_zt_pool_sub_new_em;
+CREATE TABLE dg_ak_stock_zt_pool_sub_new_em (
     td DATE NOT NULL,
     s_code VARCHAR(20) NOT NULL,
     s_name VARCHAR(100),
@@ -112,8 +112,8 @@ CREATE TABLE ak_dg_stock_zt_pool_sub_new_em (
 );
 
 
-DROP TABLE IF EXISTS ak_dg_stock_zt_pool_zbgc_em;
-CREATE TABLE ak_dg_stock_zt_pool_zbgc_em (
+DROP TABLE IF EXISTS dg_ak_stock_zt_pool_zbgc_em;
+CREATE TABLE dg_ak_stock_zt_pool_zbgc_em (
     td DATE NOT NULL,
     s_code VARCHAR(20) NOT NULL,
     s_name VARCHAR(100),

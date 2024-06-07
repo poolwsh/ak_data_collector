@@ -18,16 +18,16 @@ from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dguf
 from dags.dg_ak.utils.dg_ak_config import dgak_config as con
 
 current_path = Path(__file__).resolve().parent 
-config_path = current_path / 'ak_dg_s-zh-a_config.py'
+config_path = current_path / 'dg_ak_s-zh-a_config.py'
 sys.path.append(config_path.parent.as_posix())
 ak_cols_config_dict = dguf.load_ak_cols_config(config_path.as_posix())
 
-ARG_LIST_CACHE_PREFIX = "ak_dg_s_zh_a_arg_list"
+ARG_LIST_CACHE_PREFIX = "dg_ak_s_zh_a_arg_list"
 FAILED_STOCKS_CACHE_PREFIX = "failed_stocks"
 
-TRACING_TABLE_NAME = 'ak_dg_tracing_s_zh_a'
-TRADE_DATE_TABLE_NAME = 'ak_dg_stock_zh_a_trade_date'
-STOCK_CODE_NAME_TABLE = 'ak_dg_stock_zh_a_code_name'
+TRACING_TABLE_NAME = 'dg_ak_tracing_s_zh_a'
+TRADE_DATE_TABLE_NAME = 'dg_ak_stock_zh_a_trade_date'
+STOCK_CODE_NAME_TABLE = 'dg_ak_stock_zh_a_code_name'
 
 DEBUG_MODE = con.DEBUG_MODE
 DEFAULT_END_DATE = dguf.format_td8(datetime.now())
@@ -126,7 +126,7 @@ def process_batch_data(ak_func_name, period, adjust, combined_df, all_trade_date
         logger.debug(f"Combined DataFrame columns for {ak_func_name}: {combined_df.columns}")
 
     combined_df['s_code'] = combined_df['s_code'].astype(str)
-    combined_df = dguf.convert_columns(combined_df, f'ak_dg_{ak_func_name}_{period}_{adjust}', conn, task_cache_conn)
+    combined_df = dguf.convert_columns(combined_df, f'dg_ak_{ak_func_name}_{period}_{adjust}', conn, task_cache_conn)
 
     if 'td' in combined_df.columns:
         combined_df['td'] = pd.to_datetime(combined_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
@@ -136,7 +136,7 @@ def process_batch_data(ak_func_name, period, adjust, combined_df, all_trade_date
         raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
 
     # 将数据从 CSV 导入数据库
-    dguf.insert_data_from_csv(conn, temp_csv_path, f'ak_dg_{ak_func_name}_{period}_{adjust}', task_cache_conn)
+    dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}_{period}_{adjust}', task_cache_conn)
 
     # 更新交易日期
     update_trade_dates(conn, all_trade_dates)
@@ -295,7 +295,7 @@ def generate_dag(stock_func, period, adjust):
     return dag
 
 def create_dags(ak_func_name, period, adjust):
-    globals()[f'ak_dg_s_zh_a_{ak_func_name}_{period}_{adjust}'] = generate_dag(ak_func_name, period, adjust)
+    globals()[f'dg_ak_s_zh_a_{ak_func_name}_{period}_{adjust}'] = generate_dag(ak_func_name, period, adjust)
     logger.info(f"DAG for {ak_func_name} successfully created and registered.")
 
 create_dags('stock_zh_a_hist', 'daily', 'hfq')

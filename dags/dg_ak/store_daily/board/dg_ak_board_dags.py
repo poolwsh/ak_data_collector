@@ -1,12 +1,8 @@
 from __future__ import annotations
 import os
 import sys
-from pathlib import Path
-current_path = Path(__file__).resolve().parent 
-project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..','..'))
-print(project_root)
-# 将项目根目录添加到sys.path中
-sys.path.append(project_root)
+
+
 
 import random
 import pandas as pd
@@ -30,7 +26,9 @@ DEBUG_MODE = con.DEBUG_MODE
 pg_conn = PGEngine.get_conn()
 
 # 配置路径
-config_path = current_path / 'ak_dg_board_config.py'
+from pathlib import Path
+current_path = Path(__file__).resolve().parent 
+config_path = current_path / 'dg_ak_board_config.py'
 sys.path.append(config_path.parent.as_posix())
 ak_cols_config_dict = dguf.load_ak_cols_config(config_path.as_posix())
 
@@ -46,18 +44,18 @@ def get_board_list(board_list_func_name: str):
     logger.info(f"Downloading board list for {board_list_func_name}")
     raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
     try:
-        clear_table_sql = f"TRUNCATE TABLE ak_dg_{board_list_func_name};"
+        clear_table_sql = f"TRUNCATE TABLE dg_ak_{board_list_func_name};"
         with raw_conn.cursor() as cursor:
             cursor.execute(clear_table_sql)
             raw_conn.commit()
-        logger.info(f"Table ak_dg_{board_list_func_name} has been cleared.")
+        logger.info(f"Table dg_ak_{board_list_func_name} has been cleared.")
 
         board_list_data_df = dguf.get_data_today(board_list_func_name, ak_cols_config_dict)
         if DEBUG_MODE:
             logger.debug(f'length of board_list_data_df: {len(board_list_data_df)}')
             logger.debug(f'head 5 of board_list_data_df:')
             logger.debug(board_list_data_df.head(5))
-        board_list_data_df = dguf.convert_columns(board_list_data_df, f'ak_dg_{board_list_func_name}', pg_conn, task_cache_conn)
+        board_list_data_df = dguf.convert_columns(board_list_data_df, f'dg_ak_{board_list_func_name}', pg_conn, task_cache_conn)
         
         if 'td' in board_list_data_df.columns:
             board_list_data_df['td'] = pd.to_datetime(board_list_data_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
@@ -74,7 +72,7 @@ def get_board_list(board_list_func_name: str):
             logger.warning(f"No CSV file created for {board_list_func_name}, skipping database insertion.")
             return
         
-        dguf.insert_data_from_csv(raw_conn, temp_csv_path, f'ak_dg_{board_list_func_name}')
+        dguf.insert_data_from_csv(raw_conn, temp_csv_path, f'dg_ak_{board_list_func_name}')
 
     except Exception as e:
         logger.error(f"Failed to process data for {board_list_func_name}: {str(e)}")
@@ -88,8 +86,8 @@ def store_board_list(board_list_func_name: str):
     raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
 
     insert_sql = f"""
-        INSERT INTO ak_dg_{board_list_func_name}_store
-        SELECT * FROM ak_dg_{board_list_func_name}
+        INSERT INTO dg_ak_{board_list_func_name}_store
+        SELECT * FROM dg_ak_{board_list_func_name}
         ON CONFLICT (td, b_name) DO NOTHING
         RETURNING td;
     """
@@ -133,11 +131,11 @@ def get_board_cons(board_list_func_name: str, board_cons_func_name: str):
     logger.info(f"Starting to save data for {board_cons_func_name}")
     raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
     try:
-        clear_table_sql = f"TRUNCATE TABLE ak_dg_{board_cons_func_name};"
+        clear_table_sql = f"TRUNCATE TABLE dg_ak_{board_cons_func_name};"
         with raw_conn.cursor() as cursor:
             cursor.execute(clear_table_sql)
             raw_conn.commit()
-        logger.info(f"Table ak_dg_{board_cons_func_name} has been cleared.")
+        logger.info(f"Table dg_ak_{board_cons_func_name} has been cleared.")
 
         redis_key = get_redis_key(BOARD_LIST_KEY_PREFIX, board_list_func_name)
         board_list_df = dguf.read_df_from_redis(redis_key, task_cache_conn)
@@ -146,7 +144,7 @@ def get_board_cons(board_list_func_name: str, board_cons_func_name: str):
             raise AirflowException(f"No dates available for {board_list_func_name}, skipping data fetch.")
         
         board_cons_df = dguf.get_data_by_board_names(board_cons_func_name, ak_cols_config_dict, board_list_df['b_name'])
-        board_cons_df = dguf.convert_columns(board_cons_df, f'ak_dg_{board_cons_func_name}', pg_conn, task_cache_conn)
+        board_cons_df = dguf.convert_columns(board_cons_df, f'dg_ak_{board_cons_func_name}', pg_conn, task_cache_conn)
         
         if 'td' in board_cons_df.columns:
             board_cons_df['td'] = pd.to_datetime(board_cons_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
@@ -155,7 +153,7 @@ def get_board_cons(board_list_func_name: str, board_cons_func_name: str):
         if temp_csv_path is None:
             raise AirflowException(f"No CSV file created for {board_cons_func_name}, skipping database insertion.")
         
-        dguf.insert_data_from_csv(raw_conn, temp_csv_path, f'ak_dg_{board_cons_func_name}')
+        dguf.insert_data_from_csv(raw_conn, temp_csv_path, f'dg_ak_{board_cons_func_name}')
 
     except Exception as e:
         logger.error(f"Failed to process data for {board_cons_func_name}: {str(e)}")
@@ -169,8 +167,8 @@ def store_board_cons(board_cons_func_name: str):
     raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
 
     insert_sql = f"""
-        INSERT INTO ak_dg_{board_cons_func_name}_store
-        SELECT * FROM ak_dg_{board_cons_func_name}
+        INSERT INTO dg_ak_{board_cons_func_name}_store
+        SELECT * FROM dg_ak_{board_cons_func_name}
         ON CONFLICT (td, s_code, b_name) DO NOTHING
         RETURNING td, b_name;
     """
@@ -326,6 +324,6 @@ for func_names in ak_func_name_list:
     words = func_names[0].split('_')
     source = words[-1]
     board_type = words[-3]
-    dag_name = f'ak_dg_board_{board_type}_{source}'
+    dag_name = f'dg_ak_board_{board_type}_{source}'
     globals()[dag_name] = generate_dag(func_names[0], func_names[1])
     logger.info(f"DAG for {dag_name} successfully created and registered.")

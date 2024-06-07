@@ -1,6 +1,6 @@
 
-DROP TABLE IF EXISTS ak_da_stock_price_hl;
-CREATE TABLE ak_da_stock_price_hl (
+DROP TABLE IF EXISTS da_ak_stock_price_hl;
+CREATE TABLE da_ak_stock_price_hl (
     s_code VARCHAR(20) NOT NULL,        -- 股票代码
     td DATE NOT NULL,                   -- 交易日期
     interval INT NOT NULL,              -- 时间间隔
@@ -18,10 +18,10 @@ CREATE TABLE ak_da_stock_price_hl (
     pct_chg_to_tg FLOAT,                -- 到目标高点或目标低点的百分比变化
     PRIMARY KEY (s_code, td, interval)  -- 组合主键：股票代码、交易日期和间隔
 );
-SELECT create_hypertable('ak_da_stock_price_hl', 'td');
+SELECT create_hypertable('da_ak_stock_price_hl', 'td');
 
-DROP TABLE IF EXISTS ak_da_stock_price_hl_store;
-CREATE TABLE ak_da_stock_price_hl_store (
+DROP TABLE IF EXISTS da_ak_stock_price_hl_store;
+CREATE TABLE da_ak_stock_price_hl_store (
     s_code VARCHAR(20) NOT NULL,        -- 股票代码
     td DATE NOT NULL,                   -- 交易日期
     interval INT NOT NULL,              -- 时间间隔
@@ -39,4 +39,4 @@ CREATE TABLE ak_da_stock_price_hl_store (
     pct_chg_to_tg FLOAT,                -- 到目标高点或目标低点的百分比变化
     PRIMARY KEY (s_code, td, interval)  -- 组合主键：股票代码、交易日期和间隔
 );
-SELECT create_hypertable('ak_da_stock_price_hl_store', 'td');
+SELECT create_hypertable('da_ak_stock_price_hl_store', 'td');

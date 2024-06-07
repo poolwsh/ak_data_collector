@@ -31,8 +31,8 @@ ak_cols_config_dict = dguf.load_ak_cols_config(config_path.as_posix())
 ARG_LIST_CACHE_PREFIX = "dg_fy_s-us_arg_list"
 FAILED_STOCKS_CACHE_PREFIX = "dg_fy_s-us_failed_stocks"
 
-TRACING_TABLE_NAME = 'fy_dg_tracing_s_us'
-TRADE_DATE_TABLE_NAME = 'fy_dg_stock_us_trade_date'
+TRACING_TABLE_NAME = 'dg_fy_tracing_s_us'
+TRADE_DATE_TABLE_NAME = 'dg_fy_stock_us_trade_date'
 STOCK_SYMBOL_TABLE = 'fh_dg_s_us_symbol'
 STOCK_DATA_KEY = 'stock_us_hist_daily_bfq'
 
@@ -221,7 +221,7 @@ def process_batch_data(combined_df, all_trade_dates, conn):
         logger.debug(f"Combined DataFrame columns for {STOCK_DATA_KEY}: {combined_df.columns}")
 
     combined_df['symbol'] = combined_df['symbol'].astype(str)
-    combined_df = dguf.convert_columns(combined_df, f'fy_dg_{STOCK_DATA_KEY}', conn, task_cache_conn)
+    combined_df = dguf.convert_columns(combined_df, f'dg_fy_{STOCK_DATA_KEY}', conn, task_cache_conn)
     if 'td' in combined_df.columns:
         combined_df['td'] = pd.to_datetime(combined_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
     if DEBUG_MODE:
@@ -229,7 +229,7 @@ def process_batch_data(combined_df, all_trade_dates, conn):
     temp_csv_path = dguf.save_data_to_csv(combined_df, f'{STOCK_DATA_KEY}')
     if temp_csv_path is None:
         raise AirflowException(f"No CSV file created for {STOCK_DATA_KEY}, skipping database insertion.")
-    dguf.insert_data_from_csv(conn, temp_csv_path, f'fy_dg_{STOCK_DATA_KEY}', task_cache_conn)
+    dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_fy_{STOCK_DATA_KEY}', task_cache_conn)
     update_trade_dates(conn, all_trade_dates)
     # 按symbol分组，计算每组的最大交易日期
     updates = combined_df.groupby('symbol')['td'].max().reset_index().values.tolist()

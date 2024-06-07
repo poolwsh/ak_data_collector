@@ -1,6 +1,6 @@
 
-DROP TABLE IF EXISTS fy_dg_tracing_s_us;
-CREATE TABLE fy_dg_tracing_s_us (
+DROP TABLE IF EXISTS dg_fy_tracing_s_us;
+CREATE TABLE dg_fy_tracing_s_us (
     symbol VARCHAR NOT NULL,
     last_td DATE,
     create_time TIMESTAMP,
@@ -27,16 +27,16 @@ CREATE TABLE fh_dg_s_us_symbol (
 );
 
 
-DROP TABLE IF EXISTS fy_dg_stock_us_trade_date;
-CREATE TABLE fy_dg_stock_us_trade_date (
+DROP TABLE IF EXISTS dg_fy_stock_us_trade_date;
+CREATE TABLE dg_fy_stock_us_trade_date (
     trade_date DATE NOT NULL,
     create_time TIMESTAMP,
     update_time TIMESTAMP,
     PRIMARY KEY (trade_date)
 );
 
-DROP TABLE IF EXISTS fy_dg_stock_us_hist_daily_bfq;
-CREATE TABLE fy_dg_stock_us_hist_daily_bfq (
+DROP TABLE IF EXISTS dg_fy_stock_us_hist_daily_bfq;
+CREATE TABLE dg_fy_stock_us_hist_daily_bfq (
     symbol VARCHAR(20) NOT NULL,    -- 股票代码，作为主键的第一部分
     td DATE NOT NULL,               -- 交易日期，作为主键的第二部分
     o FLOAT,                        -- 开盘价
@@ -49,4 +49,4 @@ CREATE TABLE fy_dg_stock_us_hist_daily_bfq (
     stock_splits FLOAT,             -- 股票拆分
     PRIMARY KEY (symbol, td)        -- 组合主键：股票代码和交易日期
 );
-SELECT create_hypertable('fy_dg_stock_us_hist_daily_bfq', 'td');
+SELECT create_hypertable('dg_fy_stock_us_hist_daily_bfq', 'td');

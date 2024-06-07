@@ -1,7 +1,7 @@
 
 
-DROP TABLE IF EXISTS ak_dg_index_zh_a_hist_daily;
-CREATE TABLE ak_dg_index_zh_a_hist_daily (
+DROP TABLE IF EXISTS dg_ak_index_zh_a_hist_daily;
+CREATE TABLE dg_ak_index_zh_a_hist_daily (
     i_code VARCHAR(20) NOT NULL,    -- 股票代码，作为主键的第一部分
     td DATE NOT NULL,             -- 交易日期，作为主键的第二部分
     o FLOAT,                        -- 开盘价
@@ -16,11 +16,11 @@ CREATE TABLE ak_dg_index_zh_a_hist_daily (
     turnover_rate FLOAT,            -- 换手率
     PRIMARY KEY (i_code, td)      -- 组合主键：股票代码和交易日期
 );
-SELECT create_hypertable('ak_dg_index_zh_a_hist_daily', 'td');
+SELECT create_hypertable('dg_ak_index_zh_a_hist_daily', 'td');
 
 
-DROP TABLE IF EXISTS ak_dg_index_zh_a_code_name;
-CREATE TABLE ak_dg_index_zh_a_code_name (
+DROP TABLE IF EXISTS dg_ak_index_zh_a_code_name;
+CREATE TABLE dg_ak_index_zh_a_code_name (
     i_code VARCHAR(20) NOT NULL PRIMARY KEY, -- 股票代码，作为主键
     i_name VARCHAR(100) NOT NULL,            -- 股票名称
     symbol VARCHAR(100),

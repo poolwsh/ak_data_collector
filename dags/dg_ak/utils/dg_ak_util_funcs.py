@@ -18,7 +18,7 @@ from typing import Optional, List
 from sqlalchemy.exc import SQLAlchemyError
 
 
-from utils.ak_utils import AkUtilTools
+from dags.utils.dg_utils import AkUtilTools
 from utils.logger import logger
 from dags.dg_ak.utils.dg_ak_config import dgak_config as con
 
@@ -145,14 +145,14 @@ class DgAkUtilFuncs(AkUtilTools):
     @staticmethod
     def get_trade_dates(pg_conn) -> list:
         with pg_conn.cursor() as cursor:
-            _query = "SELECT trade_date FROM ak_dg_stock_zh_a_trade_date;"
+            _query = "SELECT trade_date FROM dg_ak_stock_zh_a_trade_date;"
             if DEBUG_MODE:
                 logger.debug(f"Executing query to get trade dates: {_query}")
             try:
                 cursor.execute(_query)
                 rows = cursor.fetchall()
                 _trade_dates = [row[0] for row in rows]  # Use index 0 to access the first element of the tuple
-                logger.info("Trade dates retrieved successfully from ak_dg_stock_zh_a_trade_date.")
+                logger.info("Trade dates retrieved successfully from dg_ak_stock_zh_a_trade_date.")
                 if DEBUG_MODE:
                     logger.debug(f"Trade dates length: {len(_trade_dates)}, first 5 dates: {_trade_dates[:5]}")
                 return _trade_dates
@@ -182,7 +182,7 @@ class DgAkUtilFuncs(AkUtilTools):
     # def get_data_and_save2csv(redis_key, ak_func_name, ak_cols_config_dict, pg_conn, redis_conn, temp_dir=con.CACHE_ROOT):
     #     if DEBUG_MODE:
     #         logger.debug(f"Fetching data for redis_key: {redis_key}, ak_func_name: {ak_func_name}")
-    #     _table_name = f"ak_dg_{ak_func_name}"
+    #     _table_name = f"dg_ak_{ak_func_name}"
     #     _date_df = DgAkUtilFuncs.read_df_from_redis(redis_key, redis_conn)
 
     #     _date_list = [DgAkUtilFuncs.format_td8(_date) for _date in _date_df['td'].sort_values(ascending=False).tolist()]
@@ -464,10 +464,10 @@ class DgAkUtilFuncs(AkUtilTools):
             logger.info(f"Data successfully inserted into table for {ak_func_name}")
 
             if truncate:
-                _truncate_sql = f"TRUNCATE TABLE ak_dg_{ak_func_name};"
+                _truncate_sql = f"TRUNCATE TABLE dg_ak_{ak_func_name};"
                 _cursor.execute(_truncate_sql)
                 pg_conn.commit()
-                logger.info(f"Table ak_dg_{ak_func_name} has been truncated")
+                logger.info(f"Table dg_ak_{ak_func_name} has been truncated")
 
             if DEBUG_MODE:
                 logger.debug(f"Inserted rows length: {len(_inserted_rows)}, first 5 rows: {_inserted_rows[:5]}")
@@ -510,7 +510,7 @@ class DgAkUtilFuncs(AkUtilTools):
     def get_tracing_by_date(pg_conn, key):
         _sql = """
         SELECT ak_func_name, td, create_time, update_time, category, is_active, host_name
-        FROM ak_dg_tracing_by_date
+        FROM dg_ak_tracing_by_date
         WHERE ak_func_name = %s;
         """
         if DEBUG_MODE:
@@ -567,7 +567,7 @@ class DgAkUtilFuncs(AkUtilTools):
         _host_name = os.getenv('HOSTNAME', socket.gethostname())
         _current_time = datetime.now()
         _insert_sql = """
-            INSERT INTO ak_dg_tracing_by_date (ak_func_name, last_td, create_time, update_time, host_name)
+            INSERT INTO dg_ak_tracing_by_date (ak_func_name, last_td, create_time, update_time, host_name)
             VALUES (%s, %s, %s, %s, %s)
             ON CONFLICT (ak_func_name) DO UPDATE 
             SET last_td = EXCLUDED.last_td,
@@ -582,7 +582,7 @@ class DgAkUtilFuncs(AkUtilTools):
     def insert_tracing_date_1_param_data(conn, ak_func_name, param_name, date_values):
         _data = DgAkUtilFuncs.prepare_tracing_data(ak_func_name, param_name, date_values)
         _insert_sql = """
-            INSERT INTO ak_dg_tracing_by_date_1_param (ak_func_name, param_name, param_value, last_td, create_time, update_time, host_name)
+            INSERT INTO dg_ak_tracing_by_date_1_param (ak_func_name, param_name, param_value, last_td, create_time, update_time, host_name)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (ak_func_name, param_name, param_value) DO UPDATE 
             SET last_td = EXCLUDED.last_td,
@@ -597,7 +597,7 @@ class DgAkUtilFuncs(AkUtilTools):
     def insert_tracing_scode_date_data(conn, ak_func_name, scode_list, date):
         _data = [(ak_func_name, _scode, date, datetime.now(), datetime.now(), os.getenv('HOSTNAME', socket.gethostname())) for _scode in scode_list]
         _insert_sql = """
-            INSERT INTO ak_dg_tracing_by_scode_date (ak_func_name, scode, last_td, create_time, update_time, host_name)
+            INSERT INTO dg_ak_tracing_by_scode_date (ak_func_name, scode, last_td, create_time, update_time, host_name)
             VALUES (%s, %s, %s, %s, %s, %s)
             ON CONFLICT (ak_func_name, scode) DO UPDATE 
             SET last_td = EXCLUDED.last_td,

@@ -26,7 +26,7 @@ DEBUG_MODE = con.DEBUG_MODE
 pg_conn = PGEngine.get_conn()
 
 # 配置路径
-config_path = Path(__file__).resolve().parent / 'ak_dg_ff_config.py'
+config_path = Path(__file__).resolve().parent / 'dg_ak_ff_config.py'
 sys.path.append(config_path.parent.as_posix())
 ak_cols_config_dict = dguf.load_ak_cols_config(config_path.as_posix())
 
@@ -34,9 +34,9 @@ ak_cols_config_dict = dguf.load_ak_cols_config(config_path.as_posix())
 FF_DATE_LIST_KEY_PREFIX = "ff_date_list"
 STORED_KEYS_KEY_PREFIX = "stored_keys"
 
-TRACING_TABLE_NAME_BY_DATE = 'ak_dg_tracing_by_date'
-TRACING_TABLE_NAME_BY_DATE_PARAM = 'ak_dg_tracing_by_date_1_param'
-TRACING_TABLE_NAME_BY_SCODE_DATE = 'ak_dg_tracing_by_scode_date'
+TRACING_TABLE_NAME_BY_DATE = 'dg_ak_tracing_by_date'
+TRACING_TABLE_NAME_BY_DATE_PARAM = 'dg_ak_tracing_by_date_1_param'
+TRACING_TABLE_NAME_BY_SCODE_DATE = 'dg_ak_tracing_by_scode_date'
 
 # 配置 today 变量
 if DEBUG_MODE:
@@ -72,9 +72,9 @@ def fetch_and_process_data(func_name, ak_func, table_name, params=None, param_ke
         data = dguf.convert_columns(data, table_name, pg_conn, task_cache_conn)
 
         conflict_columns = ['td', 'b_name'] if table_name in [
-            'ak_dg_stock_sector_fund_flow_rank', 'stock_sector_fund_flow_summary',
-            'ak_dg_stock_sector_fund_flow_hist', 'ak_dg_stock_concept_fund_flow_hist'] else ['td', 's_code']
-        if table_name == 'ak_dg_stock_market_fund_flow':
+            'dg_ak_stock_sector_fund_flow_rank', 'stock_sector_fund_flow_summary',
+            'dg_ak_stock_sector_fund_flow_hist', 'dg_ak_stock_concept_fund_flow_hist'] else ['td', 's_code']
+        if table_name == 'dg_ak_stock_market_fund_flow':
             conflict_columns = ['td']
 
         update_columns = [col for col in data.columns if col not in conflict_columns]
@@ -121,7 +121,7 @@ def process_batch_data(ak_func_name: str, df: pd.DataFrame):
         raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
 
     with PGEngine.get_conn() as conn:
-        dguf.insert_data_from_csv(conn, temp_csv_path, f'ak_dg_{ak_func_name}', task_cache_conn)
+        dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}', task_cache_conn)
 
     last_td = df['td'].max()
     updates = [(_s_code, last_td) for _s_code in df['s_code'].unique()]
@@ -154,7 +154,7 @@ def get_stock_individual_fund_flow():
             data.dropna(inplace=True)
             data['s_code'] = _s_code
             data['td'] = data['td'].apply(dguf.format_td10)
-            data = dguf.convert_columns(data, f'ak_dg_{ak_func_name}', pg_conn, task_cache_conn)
+            data = dguf.convert_columns(data, f'dg_ak_{ak_func_name}', pg_conn, task_cache_conn)
             all_data.append(data)
             total_rows += len(data)
 
@@ -179,11 +179,11 @@ def get_stock_individual_fund_flow_rank():
         raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
 
     with PGEngine.get_conn() as conn:
-        dguf.insert_data_from_csv(conn, temp_csv_path, f'ak_dg_{ak_func_name}', task_cache_conn)
+        dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}', task_cache_conn)
         dguf.insert_tracing_date_data(conn, ak_func_name, today)
 
 def get_stock_market_fund_flow():
-    fetch_and_process_data("stock_market_fund_flow", lambda: dguf.get_data_today("stock_market_fund_flow", ak_cols_config_dict), 'ak_dg_stock_market_fund_flow')
+    fetch_and_process_data("stock_market_fund_flow", lambda: dguf.get_data_today("stock_market_fund_flow", ak_cols_config_dict), 'dg_ak_stock_market_fund_flow')
     ak_func_name = "stock_market_fund_flow"
     df = dguf.get_data_by_none(ak_func_name, ak_cols_config_dict[func_name])
 
@@ -192,7 +192,7 @@ def get_stock_market_fund_flow():
         raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
 
     with PGEngine.get_conn() as conn:
-        dguf.insert_data_from_csv(conn, temp_csv_path, f'ak_dg_{ak_func_name}', task_cache_conn)
+        dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}', task_cache_conn)
         dguf.insert_tracing_date_data(conn, ak_func_name, df['td'].max)
 
 def get_stock_sector_fund_flow_rank():
@@ -214,7 +214,7 @@ def get_stock_sector_fund_flow_rank():
             raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
 
         with PGEngine.get_conn() as conn:
-            dguf.insert_data_from_csv(conn, temp_csv_path, f'ak_dg_{ak_func_name}', task_cache_conn)
+            dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}', task_cache_conn)
             dguf.insert_tracing_date_data(conn, ak_func_name, today)
 
 def get_stock_main_fund_flow():
@@ -229,12 +229,12 @@ def get_stock_main_fund_flow():
         raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
 
     with PGEngine.get_conn() as conn:
-        dguf.insert_data_from_csv(conn, temp_csv_path, f'ak_dg_{ak_func_name}', task_cache_conn)
+        dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}', task_cache_conn)
         dguf.insert_tracing_date_data(conn, ak_func_name, today)
 
 def get_stock_sector_fund_flow_summary():
     ak_func_name = 'stock_sector_fund_flow_summary'
-    b_names = dguf.get_b_names_from_date(pg_conn, "ak_dg_stock_board_industry_name_em", today)
+    b_names = dguf.get_b_names_from_date(pg_conn, "dg_ak_stock_board_industry_name_em", today)
     all_data = []
     len_b_names = len(b_names)
 
@@ -254,11 +254,11 @@ def get_stock_sector_fund_flow_summary():
             raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
 
         with PGEngine.get_conn() as conn:
-            dguf.insert_data_from_csv(conn, temp_csv_path, f'ak_dg_{ak_func_name}', task_cache_conn)
+            dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}', task_cache_conn)
             dguf.insert_tracing_date_data(conn, ak_func_name, today)
 
 def get_stock_sector_fund_flow_hist():
-    b_names = dguf.get_b_names_from_date(pg_conn, "ak_dg_stock_board_industry_name_em", today)
+    b_names = dguf.get_b_names_from_date(pg_conn, "dg_ak_stock_board_industry_name_em", today)
     all_data = []
     for b_name in b_names:
         data = dguf.try_to_call(lambda: ak.stock_sector_fund_flow_hist(symbol=b_name))
@@ -269,11 +269,11 @@ def get_stock_sector_fund_flow_hist():
             all_data.append(data)
     if all_data:
         combined_data = pd.concat(all_data, ignore_index=True)
-        fetch_and_process_data("stock_sector_fund_flow_hist", lambda: combined_data, 'ak_dg_stock_sector_fund_flow_hist')
+        fetch_and_process_data("stock_sector_fund_flow_hist", lambda: combined_data, 'dg_ak_stock_sector_fund_flow_hist')
 
 
 def get_stock_concept_fund_flow_hist():
-    b_names = dguf.get_b_names_from_table(pg_conn, "ak_dg_stock_board_concept_name_em")
+    b_names = dguf.get_b_names_from_table(pg_conn, "dg_ak_stock_board_concept_name_em")
     all_data = []
     for b_name in b_names:
         data = dguf.try_to_call(lambda: ak.stock_concept_fund_flow_hist(symbol=b_name))
@@ -284,7 +284,7 @@ def get_stock_concept_fund_flow_hist():
             all_data.append(data)
     if all_data:
         combined_data = pd.concat(all_data, ignore_index=True)
-        fetch_and_process_data("stock_concept_fund_flow_hist", lambda: combined_data, 'ak_dg_stock_concept_fund_flow_hist')
+        fetch_and_process_data("stock_concept_fund_flow_hist", lambda: combined_data, 'dg_ak_stock_concept_fund_flow_hist')
 
 
 ak_func_name_mapping = {
@@ -361,7 +361,7 @@ ak_func_name_list = {
 
 for func_name, task_func in ak_func_name_list.items():
     try:
-        dag_name = f'ak_dg_ff_{func_name}'
+        dag_name = f'dg_ak_ff_{func_name}'
         globals()[dag_name] = generate_dag(func_name, task_func)
         logger.info(f"DAG for {dag_name} successfully created and registered.")
     except Exception as e:

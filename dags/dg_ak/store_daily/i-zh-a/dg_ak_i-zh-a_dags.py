@@ -20,15 +20,15 @@ from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dguf
 from dags.dg_ak.utils.dg_ak_config import dgak_config as con
 
 current_path = Path(__file__).resolve().parent 
-config_path = current_path / 'ak_dg_i-zh-a_config.py'
+config_path = current_path / 'dg_ak_i-zh-a_config.py'
 sys.path.append(config_path.parent.as_posix())
 ak_cols_config_dict = dguf.load_ak_cols_config(config_path.as_posix())
 
-ARG_LIST_CACHE_PREFIX = "ak_dg_i_zh_a_arg_list"
+ARG_LIST_CACHE_PREFIX = "dg_ak_i_zh_a_arg_list"
 FAILED_INDEXES_CACHE_PREFIX = "failed_indexes"
 
-TRACING_TABLE_NAME = 'ak_dg_tracing_i_zh_a'
-INDEX_CODE_NAME_TABLE = 'ak_dg_index_zh_a_code_name'
+TRACING_TABLE_NAME = 'dg_ak_tracing_i_zh_a'
+INDEX_CODE_NAME_TABLE = 'dg_ak_index_zh_a_code_name'
 
 DEBUG_MODE = con.DEBUG_MODE
 DEFAULT_END_DATE = dguf.format_td8(datetime.now())
@@ -81,7 +81,7 @@ def get_i_code_name_list(redis_conn: redis.Redis, pg_conn, ttl: int = 60 * 60):
     
     # Read from database if Redis and AkShare data are not available
     try:
-        query = "SELECT i_code, i_name FROM ak_dg_index_zh_a_code_name"
+        query = "SELECT i_code, i_name FROM dg_ak_index_zh_a_code_name"
         _df = pd.read_sql(query, pg_conn)
         if not _df.empty:
             if DEBUG_MODE:
@@ -91,7 +91,7 @@ def get_i_code_name_list(redis_conn: redis.Redis, pg_conn, ttl: int = 60 * 60):
                     logger.debug(item)
             return _df[['i_code', 'i_name']].values.tolist()
         else:
-            logger.warning("No data found in database table ak_dg_index_zh_a_code_name.")
+            logger.warning("No data found in database table dg_ak_index_zh_a_code_name.")
     except Exception as _db_e:
         logger.error(f"Error reading from database: {_db_e}")
     
@@ -102,7 +102,7 @@ def update_i_code_name_in_db(df, pg_conn):
         with pg_conn.cursor() as cursor:
             for index, row in df.iterrows():
                 sql = f"""
-                    INSERT INTO ak_dg_index_zh_a_code_name (i_code, i_name, symbol, create_time, update_time)
+                    INSERT INTO dg_ak_index_zh_a_code_name (i_code, i_name, symbol, create_time, update_time)
                     VALUES (%s, %s, %s, NOW(), NOW())
                     ON CONFLICT (i_code) DO UPDATE 
                     SET i_name = EXCLUDED.i_name, symbol = EXCLUDED.symbol, update_time = EXCLUDED.update_time;
@@ -194,7 +194,7 @@ def process_batch_data(ak_func_name, period, combined_df, conn):
         logger.debug(f"Combined DataFrame columns for {ak_func_name}: {combined_df.columns}")
 
     combined_df['i_code'] = combined_df['i_code'].astype(str)
-    combined_df = dguf.convert_columns(combined_df, f'ak_dg_{ak_func_name}_{period}', conn, task_cache_conn)
+    combined_df = dguf.convert_columns(combined_df, f'dg_ak_{ak_func_name}_{period}', conn, task_cache_conn)
 
     if 'td' in combined_df.columns:
         combined_df['td'] = pd.to_datetime(combined_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
@@ -204,7 +204,7 @@ def process_batch_data(ak_func_name, period, combined_df, conn):
         raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
 
     # 将数据从 CSV 导入数据库
-    dguf.insert_data_from_csv(conn, temp_csv_path, f'ak_dg_{ak_func_name}_{period}', task_cache_conn)
+    dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}_{period}', task_cache_conn)
 
 
     last_td = combined_df['td'].max()
@@ -351,7 +351,7 @@ def generate_dag(index_func, period):
     return dag
 
 def create_dags(ak_func_name, period):
-    globals()[f'ak_dg_i_zh_a_{ak_func_name}_{period}'] = generate_dag(ak_func_name, period)
+    globals()[f'dg_ak_i_zh_a_{ak_func_name}_{period}'] = generate_dag(ak_func_name, period)
     logger.info(f"DAG for {ak_func_name} successfully created and registered.")
 
 create_dags('index_zh_a_hist', 'daily')

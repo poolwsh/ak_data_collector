@@ -16,11 +16,11 @@ DEBUG_MODE = con.DEBUG_MODE
 
 from pathlib import Path
 current_path = Path(__file__).resolve().parent 
-config_path = current_path / 'ak_dg_zdt_config.py'
+config_path = current_path / 'dg_ak_zdt_config.py'
 sys.path.append(config_path.parent.as_posix())
 ak_cols_config_dict = dguf.load_ak_cols_config(config_path.as_posix())
 
-TRACING_TABLE_NAME = 'ak_dg_tracing_by_date'
+TRACING_TABLE_NAME = 'dg_ak_tracing_by_date'
 
 default_trade_dates = 50
 rollback_days = 10
@@ -45,7 +45,7 @@ def get_date_list(conn, ak_func_name):
 def get_zdt_data(pg_conn, ak_func_name, date_list, temp_dir=con.CACHE_ROOT):
     _ak_data_df = dguf.get_data_by_td_list(ak_func_name, ak_cols_config_dict, date_list)
     
-    _desired_columns = [col[0] for col in dguf.get_columns_from_table(pg_conn, f'ak_dg_{ak_func_name}', task_cache_conn)]
+    _desired_columns = [col[0] for col in dguf.get_columns_from_table(pg_conn, f'dg_ak_{ak_func_name}', task_cache_conn)]
     try:
         _ak_data_df = _ak_data_df[_desired_columns]
     except KeyError as e:
@@ -78,7 +78,7 @@ def get_store_and_update_data(ak_func_name: str):
 
         selected_date_list = get_date_list(conn, ak_func_name)
         temp_csv_path = get_zdt_data(conn, ak_func_name, selected_date_list)
-        dguf.insert_data_from_csv(conn, temp_csv_path, f'ak_dg_{ak_func_name}', task_cache_conn)
+        dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}', task_cache_conn)
         update_tracing_table(conn, ak_func_name, selected_date_list)
 
     except Exception as e:
@@ -141,6 +141,6 @@ ak_func_name_list = [
 ]
 
 for func_name in ak_func_name_list:
-    dag_name = f'ak_dg_zdt_{func_name}'
+    dag_name = f'dg_ak_zdt_{func_name}'
     globals()[dag_name] = generate_dag(func_name)
     logger.info(f"DAG for {dag_name} successfully created and registered.")
