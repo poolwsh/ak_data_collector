@@ -1,7 +1,7 @@
 version: '3.8'
 
 networks:
-  airflow_network:
+  stock_data_server_network:
     driver: bridge
 
 services:
@@ -14,11 +14,11 @@ services:
       TZ: Asia/Shanghai
     volumes:
       # - /data/airflow/db/timescaledb/data:/var/lib/postgresql/data:rw
-      - ./init_airflow_db.sh:/docker-entrypoint-initdb.d/init_airflow_db.sh  # 挂载初始化脚本
+      - ./init_airflow_db.sh:/docker-entrypoint-initdb.d/init_airflow_db.sh
     ports:
       - "25432:5432"
     networks:
-      - airflow_network
+      - stock_data_server_network
     restart: always
 
   redis:
@@ -33,7 +33,7 @@ services:
     ports:
       - "26379:6379"
     networks:
-      - airflow_network
+      - stock_data_server_network
     restart: always
 
   airflow:
@@ -59,9 +59,8 @@ services:
       - ../dags:/opt/airflow/dags
       - /data/airflow/log:/data/airflow/log
       - /data/airflow/cache:/data/airflow/cache
-      - /home/wsh/.cache/pip:/root/.cache/pip
     networks:
-      - airflow_network
+      - stock_data_server_network
     ports:
       - "28080:8080"
     restart: always
