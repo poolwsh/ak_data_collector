@@ -39,8 +39,9 @@ TRACING_TABLE_NAME_BY_DATE_PARAM = 'dg_ak_tracing_by_date_1_param'
 TRACING_TABLE_NAME_BY_SCODE_DATE = 'dg_ak_tracing_by_scode_date'
 
 # 配置 today 变量
-if DEBUG_MODE:
-    today = max(dguf.get_trade_dates(pg_conn)).strftime('%Y-%m-%d')
+td_list = dguf.get_trade_dates(pg_conn)
+if DEBUG_MODE and td_list and len(td_list)>0:
+        today = max(td_list).strftime('%Y-%m-%d')
 else:
     today = datetime.now().strftime('%Y-%m-%d')
 
