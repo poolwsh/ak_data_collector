@@ -30,11 +30,11 @@ class PGEngine(object):
     pg_pool = pool.SimpleConnectionPool(
         1,  # minconn
         20, # maxconn
-        user=con.ak_data_user,
-        password=con.ak_data_password,
-        host=con.ak_data_hostname,
-        port=con.ak_data_port,
-        database=con.ak_data_db_name
+        user=con.dag_s_data_user,
+        password=con.dag_s_data_password,
+        host=con.dag_s_data_hostname,
+        port=con.dag_s_data_port,
+        database=con.dag_s_data_db_name
     )
 
     @staticmethod

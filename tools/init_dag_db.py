@@ -18,11 +18,6 @@ pg_sql_user = "postgres"
 pg_sql_password = "postgres_pw"
 pg_db_name='postgres'
 
-# ak_data_hostname = "timescaledb"
-# ak_data_port = "5432"
-# ak_data_user = "ak_data_user"
-# ak_data_password = "ak_data_pw"
-# ak_data_db_name='ak_data'
 
 # 配置日志记录
 logging.basicConfig(level=logging.INFO)
@@ -39,9 +34,6 @@ directories_to_scan = [
 RECREATE_DB = True  # 如果需要删除并重建数据库，将此值设置为 True
 
 def get_sql_files(directories):
-    """
-    获取指定目录下的所有 SQL 文件
-    """
     sql_files = []
     for directory in directories:
         sql_files.extend(glob.glob(os.path.join(directory, '**', '*.sql'), recursive=True))
@@ -50,10 +42,7 @@ def get_sql_files(directories):
     sql_files.sort(key=lambda x: 'create_s-zh-a_tables.sql' not in x)
     return sql_files
 
-def create_ak_data_database():
-    """
-    创建 ak_data 数据库（如果不存在）
-    """
+def create_dag_s_data_database():
     try:
         # 使用默认数据库连接，确保连接到 Postgres 实例而不是特定的数据库
         default_engine = create_engine(f'postgresql+psycopg2://{pg_sql_user}:{pg_sql_password}@{pg_sql_hostname}:{pg_sql_port}/{pg_db_name}', isolation_level='AUTOCOMMIT')
@@ -61,28 +50,28 @@ def create_ak_data_database():
 
         # 如果 RECREATE_DB 为 True，删除并重建数据库
         if RECREATE_DB:
-            conn.execute(f"DROP DATABASE IF EXISTS {con.ak_data_db_name}")
-            logger.info(f"Database '{con.ak_data_db_name}' dropped successfully.")
+            conn.execute(f"DROP DATABASE IF EXISTS {con.dag_s_data_db_name}")
+            logger.info(f"Database '{con.dag_s_data_db_name}' dropped successfully.")
 
-        # 检查 ak_data 数据库是否存在
-        result = conn.execute(f"SELECT 1 FROM pg_database WHERE datname = '{con.ak_data_db_name}'")
+        # 检查 dag_s_data 数据库是否存在
+        result = conn.execute(f"SELECT 1 FROM pg_database WHERE datname = '{con.dag_s_data_db_name}'")
         exists = result.fetchone()
         if not exists:
-            # 如果 ak_data 数据库不存在，创建它
-            conn.execute(f"CREATE DATABASE {con.ak_data_db_name}")
-            logger.info(f"Database '{con.ak_data_db_name}' created successfully.")
+            # 如果 dag_s_data 数据库不存在，创建它
+            conn.execute(f"CREATE DATABASE {con.dag_s_data_db_name}")
+            logger.info(f"Database '{con.dag_s_data_db_name}' created successfully.")
         else:
-            logger.info(f"Database '{con.ak_data_db_name}' already exists.")
+            logger.info(f"Database '{con.dag_s_data_db_name}' already exists.")
         conn.close()
         
         # 创建数据库用户和权限
-        ak_data_engine = create_engine(f'postgresql+psycopg2://{pg_sql_user}:{pg_sql_password}@{con.ak_data_hostname}:{con.ak_data_port}/{con.ak_data_db_name}', isolation_level='AUTOCOMMIT')
-        ak_data_conn = ak_data_engine.connect()
-        ak_data_conn.execute(f"DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '{con.ak_data_user}') THEN CREATE USER {con.ak_data_user} WITH PASSWORD '{con.ak_data_password}'; END IF; END $$;")
-        ak_data_conn.execute(f"GRANT ALL PRIVILEGES ON DATABASE {con.ak_data_db_name} TO {con.ak_data_user}")
-        ak_data_conn.execute(f"GRANT ALL PRIVILEGES ON SCHEMA public TO {con.ak_data_user}")
-        logger.info(f"User '{con.ak_data_user}' created and granted privileges.")
-        ak_data_conn.close()
+        dag_s_data_engine = create_engine(f'postgresql+psycopg2://{pg_sql_user}:{pg_sql_password}@{con.dag_s_data_hostname}:{con.dag_s_data_port}/{con.dag_s_data_db_name}', isolation_level='AUTOCOMMIT')
+        dag_s_data_conn = dag_s_data_engine.connect()
+        dag_s_data_conn.execute(f"DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '{con.dag_s_data_user}') THEN CREATE USER {con.dag_s_data_user} WITH PASSWORD '{con.dag_s_data_password}'; END IF; END $$;")
+        dag_s_data_conn.execute(f"GRANT ALL PRIVILEGES ON DATABASE {con.dag_s_data_db_name} TO {con.dag_s_data_user}")
+        dag_s_data_conn.execute(f"GRANT ALL PRIVILEGES ON SCHEMA public TO {con.dag_s_data_user}")
+        logger.info(f"User '{con.dag_s_data_user}' created and granted privileges.")
+        dag_s_data_conn.close()
         
     except SQLAlchemyError as e:
         logger.error(f"Error creating database or user: {e}")
@@ -103,12 +92,12 @@ def execute_sql_file(file_path, conn):
         logger.error(f"Error executing SQL file {file_path}: {e}")
 
 def main():
-    # 创建 ak_data 数据库（如果不存在）
-    create_ak_data_database()
+    # 创建 dag_s_data 数据库（如果不存在）
+    create_dag_s_data_database()
 
     # 获取数据库连接
-    ak_data_engine = create_engine(f'postgresql+psycopg2://{con.ak_data_user}:{con.ak_data_password}@{con.ak_data_hostname}:{con.ak_data_port}/{con.ak_data_db_name}')
-    conn = ak_data_engine.connect()
+    dag_s_data_engine = create_engine(f'postgresql+psycopg2://{con.dag_s_data_user}:{con.dag_s_data_password}@{con.dag_s_data_hostname}:{con.dag_s_data_port}/{con.dag_s_data_db_name}')
+    conn = dag_s_data_engine.connect()
 
     # 获取所有 SQL 文件
     sql_files = get_sql_files(directories_to_scan)

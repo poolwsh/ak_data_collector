@@ -10,7 +10,7 @@ sys.path.append(project_root)
 
 
 from dags.da_ak.utils.da_ak_config import daak_config as con
-from git.stock_data_service.dags.utils.dg_utils import AkUtilTools
+from dags.utils.dg_utils import AkUtilTools
 from utils.logger import logger
 
 from airflow.exceptions import AirflowException
