@@ -31,7 +31,8 @@ logger = logging.getLogger(__name__)
 # 设置要遍历的目录
 directories_to_scan = [
     os.path.join(project_root, 'da_ak'),
-    os.path.join(project_root, 'dg_ak')
+    os.path.join(project_root, 'dg_ak'),
+    os.path.join(project_root, 'dg_fy')
 ]
 
 # 配置开关，控制是否删除并重建数据库
