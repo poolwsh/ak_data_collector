@@ -4,7 +4,7 @@ ak_cols_config = {
                      '超大单净流入-净额', '超大单净流入-净占比', '大单净流入-净额', '大单净流入-净占比', 
                      '中单净流入-净额', '中单净流入-净占比', '小单净流入-净额', '小单净流入-净占比'],
         "remove_list": [],
-        "en_list": ['td', 'c', 'pct_chg', 'main_net_inflow', 'main_net_inflow_pct', 
+        "target_list": ['td', 'c', 'pct_chg', 'main_net_inflow', 'main_net_inflow_pct', 
                     'huge_order_net_inflow', 'huge_order_net_inflow_pct', 'large_order_net_inflow', 'large_order_net_inflow_pct',
                     'medium_order_net_inflow', 'medium_order_net_inflow_pct', 'small_order_net_inflow', 'small_order_net_inflow_pct']
     },
@@ -13,7 +13,7 @@ ak_cols_config = {
                      '今日超大单净流入-净额', '今日超大单净流入-净占比', '今日大单净流入-净额', '今日大单净流入-净占比',
                      '今日中单净流入-净额', '今日中单净流入-净占比', '今日小单净流入-净额', '今日小单净流入-净占比'],
         "remove_list": ['序号'],
-        "en_list": ['s_code', 's_name', 'latest_price', 'today_pct_chg', 'today_main_net_inflow', 'today_main_net_inflow_pct', 
+        "target_list": ['s_code', 's_name', 'latest_price', 'today_pct_chg', 'today_main_net_inflow', 'today_main_net_inflow_pct', 
                     'today_huge_order_net_inflow', 'today_huge_order_net_inflow_pct', 'today_large_order_net_inflow', 'today_large_order_net_inflow_pct', 
                     'today_medium_order_net_inflow', 'today_medium_order_net_inflow_pct', 'today_small_order_net_inflow', 'today_small_order_net_inflow_pct']
     },
@@ -23,7 +23,7 @@ ak_cols_config = {
                      '大单净流入-净额', '大单净流入-净占比', '中单净流入-净额', '中单净流入-净占比', 
                      '小单净流入-净额', '小单净流入-净占比'],
         "remove_list": [],
-        "en_list": ['td', 'shanghai_closing_price', 'shanghai_pct_chg', 'shenzhen_closing_price', 'shenzhen_pct_chg', 
+        "target_list": ['td', 'shanghai_closing_price', 'shanghai_pct_chg', 'shenzhen_closing_price', 'shenzhen_pct_chg', 
                     'main_net_inflow', 'main_net_inflow_pct', 'huge_order_net_inflow', 'huge_order_net_inflow_pct', 
                     'large_order_net_inflow', 'large_order_net_inflow_pct', 'medium_order_net_inflow', 'medium_order_net_inflow_pct', 
                     'small_order_net_inflow', 'small_order_net_inflow_pct']
@@ -34,7 +34,7 @@ ak_cols_config = {
                      '今日中单净流入-净额', '今日中单净流入-净占比', '今日小单净流入-净额', '今日小单净流入-净占比', 
                      '今日主力净流入最大股'],
         "remove_list": ['序号'],
-        "en_list": ['b_name', 'today_pct_chg', 'today_main_net_inflow', 'today_main_net_inflow_pct',
+        "target_list": ['b_name', 'today_pct_chg', 'today_main_net_inflow', 'today_main_net_inflow_pct',
                     'today_huge_order_net_inflow', 'today_huge_order_net_inflow_pct', 'today_large_order_net_inflow', 'today_large_order_net_inflow_pct', 
                     'today_medium_order_net_inflow', 'today_medium_order_net_inflow_pct', 'today_small_order_net_inflow', 'today_small_order_net_inflow_pct', 
                     'today_main_net_inflow_max_stock']
@@ -44,7 +44,7 @@ ak_cols_config = {
                      '5日排行榜-主力净占比', '5日排行榜-5日排名', '5日排行榜-5日涨跌', 
                      '10日排行榜-主力净占比', '10日排行榜-10日排名', '10日排行榜-10日涨跌', '所属板块'],
         "remove_list": ['序号'],
-        "en_list": ['s_code', 's_name', 'latest_price', 'today_main_net_inflow_pct', 'today_rank', 'today_pct_chg', 
+        "target_list": ['s_code', 's_name', 'latest_price', 'today_main_net_inflow_pct', 'today_rank', 'today_pct_chg', 
                     'main_net_inflow_pct_5day', 'rank_5day', 'pct_chg_5day', 
                     'main_net_inflow_pct_10day', 'rank_10day', 'pct_chg_10day', 'sector']
     },
@@ -53,7 +53,7 @@ ak_cols_config = {
                      '今日超大单净流入-净额', '今日超大单净流入-净占比', '今日大单净流入-净额', '今日大单净流入-净占比',
                      '今日中单净流入-净额', '今日中单净流入-净占比', '今日小单净流入-净额', '今日小单净流入-净占比'],
         "remove_list": ['序号'],
-        "en_list": ['s_code', 's_name', 'latest_price', 'today_pct_chg', 'today_main_net_inflow', 'today_main_net_inflow_pct', 
+        "target_list": ['s_code', 's_name', 'latest_price', 'today_pct_chg', 'today_main_net_inflow', 'today_main_net_inflow_pct', 
                     'today_huge_order_net_inflow', 'today_huge_order_net_inflow_pct', 'today_large_order_net_inflow', 'today_large_order_net_inflow_pct', 
                     'today_medium_order_net_inflow', 'today_medium_order_net_inflow_pct', 'today_small_order_net_inflow', 'today_small_order_net_inflow_pct']
     },
@@ -62,7 +62,7 @@ ak_cols_config = {
                      '大单净流入-净额', '大单净流入-净占比', '中单净流入-净额', '中单净流入-净占比', 
                      '小单净流入-净额', '小单净流入-净占比'],
         "remove_list": [],
-        "en_list": ['td', 'main_net_inflow', 'main_net_inflow_pct', 'huge_order_net_inflow', 'huge_order_net_inflow_pct', 
+        "target_list": ['td', 'main_net_inflow', 'main_net_inflow_pct', 'huge_order_net_inflow', 'huge_order_net_inflow_pct', 
                     'large_order_net_inflow', 'large_order_net_inflow_pct', 'medium_order_net_inflow', 'medium_order_net_inflow_pct', 
                     'small_order_net_inflow', 'small_order_net_inflow_pct']
     },
@@ -71,7 +71,7 @@ ak_cols_config = {
                      '大单净流入-净额', '大单净流入-净占比', '中单净流入-净额', '中单净流入-净占比', 
                      '小单净流入-净额', '小单净流入-净占比'],
         "remove_list": [],
-        "en_list": ['td', 'main_net_inflow', 'main_net_inflow_pct', 'huge_order_net_inflow', 'huge_order_net_inflow_pct', 
+        "target_list": ['td', 'main_net_inflow', 'main_net_inflow_pct', 'huge_order_net_inflow', 'huge_order_net_inflow_pct', 
                     'large_order_net_inflow', 'large_order_net_inflow_pct', 'medium_order_net_inflow', 'medium_order_net_inflow_pct', 
                     'small_order_net_inflow', 'small_order_net_inflow_pct']
     }
