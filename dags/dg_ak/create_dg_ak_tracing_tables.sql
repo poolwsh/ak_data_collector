@@ -1,6 +1,6 @@
 
--- create dg ak tracing tables
-DROP TABLE IF EXISTS dg_ak_tracing_by_date;
+
+
 CREATE TABLE dg_ak_tracing_by_date (
     ak_func_name VARCHAR NOT NULL,
     last_td DATE NOT NULL,
@@ -10,7 +10,8 @@ CREATE TABLE dg_ak_tracing_by_date (
     PRIMARY KEY (ak_func_name)
 );
 
-DROP TABLE IF EXISTS dg_ak_tracing_by_date_1_param;
+
+
 CREATE TABLE dg_ak_tracing_by_date_1_param (
     ak_func_name VARCHAR NOT NULL,
     param_name VARCHAR NOT NULL,
@@ -22,7 +23,8 @@ CREATE TABLE dg_ak_tracing_by_date_1_param (
     PRIMARY KEY (ak_func_name, param_name, param_value)
 );
 
-DROP TABLE IF EXISTS dg_ak_tracing_by_scode_date;
+
+
 CREATE TABLE dg_ak_tracing_by_scode_date (
     ak_func_name VARCHAR NOT NULL,
     scode VARCHAR NOT NULL,
@@ -33,7 +35,8 @@ CREATE TABLE dg_ak_tracing_by_scode_date (
     PRIMARY KEY (ak_func_name, scode)
 );
 
-DROP TABLE IF EXISTS dg_ak_tracing_s_zh_a;
+
+
 CREATE TABLE dg_ak_tracing_s_zh_a (
     ak_func_name VARCHAR NOT NULL,
     scode VARCHAR NOT NULL,
@@ -46,7 +49,8 @@ CREATE TABLE dg_ak_tracing_s_zh_a (
     PRIMARY KEY (ak_func_name, scode, period, adjust)
 );
 
-DROP TABLE IF EXISTS dg_ak_tracing_i_zh_a;
+
+
 CREATE TABLE dg_ak_tracing_i_zh_a (
     ak_func_name VARCHAR NOT NULL,
     icode VARCHAR NOT NULL,

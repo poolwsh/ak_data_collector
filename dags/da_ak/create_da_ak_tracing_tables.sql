@@ -1,4 +1,5 @@
-DROP TABLE IF EXISTS da_ak_tracing_stock_price_hl;
+
+
 CREATE TABLE da_ak_tracing_stock_price_hl (
     s_code VARCHAR NOT NULL,          -- 股票代码
     min_td DATE NOT NULL,             -- 已计算最小交易日期

@@ -1,4 +1,5 @@
-DROP TABLE IF EXISTS dg_ak_stock_individual_fund_flow_store;
+
+
 CREATE TABLE dg_ak_stock_individual_fund_flow_store (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
@@ -17,7 +18,8 @@ CREATE TABLE dg_ak_stock_individual_fund_flow_store (
     PRIMARY KEY (td, s_code)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_individual_fund_flow_rank_store;
+
+
 CREATE TABLE dg_ak_stock_individual_fund_flow_rank_store (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
@@ -37,7 +39,8 @@ CREATE TABLE dg_ak_stock_individual_fund_flow_rank_store (
     PRIMARY KEY (td, s_code)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_market_fund_flow_store;
+
+
 CREATE TABLE dg_ak_stock_market_fund_flow_store (
     td DATE NOT NULL,
     shanghai_closing_price DECIMAL,
@@ -57,7 +60,8 @@ CREATE TABLE dg_ak_stock_market_fund_flow_store (
     PRIMARY KEY (td)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_sector_fund_flow_rank_store;
+
+
 CREATE TABLE dg_ak_stock_sector_fund_flow_rank_store (
     td DATE NOT NULL,
     b_name VARCHAR(255) NOT NULL,
@@ -77,7 +81,8 @@ CREATE TABLE dg_ak_stock_sector_fund_flow_rank_store (
     PRIMARY KEY (td, b_name)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_main_fund_flow_store;
+
+
 CREATE TABLE dg_ak_stock_main_fund_flow_store (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
@@ -96,7 +101,8 @@ CREATE TABLE dg_ak_stock_main_fund_flow_store (
     PRIMARY KEY (td, s_code)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_sector_fund_flow_summary_store;
+
+
 CREATE TABLE dg_ak_stock_sector_fund_flow_summary_store (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
@@ -117,7 +123,8 @@ CREATE TABLE dg_ak_stock_sector_fund_flow_summary_store (
     PRIMARY KEY (td, s_code)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_sector_fund_flow_hist_store;
+
+
 CREATE TABLE dg_ak_stock_sector_fund_flow_hist_store (
     td DATE NOT NULL,
     b_name VARCHAR(255) NOT NULL,
@@ -134,7 +141,8 @@ CREATE TABLE dg_ak_stock_sector_fund_flow_hist_store (
     PRIMARY KEY (td, b_name)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_concept_fund_flow_hist_store;
+
+
 CREATE TABLE dg_ak_stock_concept_fund_flow_hist_store (
     td DATE NOT NULL,
     b_name VARCHAR(255) NOT NULL,

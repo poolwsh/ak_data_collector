@@ -2,7 +2,8 @@
 
 
 
-DROP TABLE IF EXISTS dg_ak_stock_zh_a_hist_daily_bfq;
+
+
 CREATE TABLE dg_ak_stock_zh_a_hist_daily_bfq (
     s_code VARCHAR(20) NOT NULL,    -- 股票代码，作为主键的第一部分
     td DATE NOT NULL,             -- 交易日期，作为主键的第二部分
@@ -22,7 +23,8 @@ SELECT create_hypertable('dg_ak_stock_zh_a_hist_daily_bfq', 'td');
 
 
 
-DROP TABLE IF EXISTS dg_ak_stock_zh_a_hist_daily_hfq;
+
+
 CREATE TABLE dg_ak_stock_zh_a_hist_daily_hfq (
     s_code VARCHAR(20) NOT NULL,    -- 股票代码，作为主键的第一部分
     td DATE NOT NULL,             -- 交易日期，作为主键的第二部分
@@ -40,7 +42,8 @@ CREATE TABLE dg_ak_stock_zh_a_hist_daily_hfq (
 );
 SELECT create_hypertable('dg_ak_stock_zh_a_hist_daily_hfq', 'td');
 
-DROP TABLE IF EXISTS dg_ak_stock_zh_a_trade_date;
+
+
 CREATE TABLE dg_ak_stock_zh_a_trade_date (
     trade_date DATE NOT NULL,
     create_time TIMESTAMP,
@@ -48,7 +51,8 @@ CREATE TABLE dg_ak_stock_zh_a_trade_date (
     PRIMARY KEY (trade_date)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_zh_a_code_name;
+
+
 CREATE TABLE dg_ak_stock_zh_a_code_name (
     s_code VARCHAR(20) NOT NULL PRIMARY KEY, -- 股票代码，作为主键
     s_name VARCHAR(100) NOT NULL,            -- 股票名称

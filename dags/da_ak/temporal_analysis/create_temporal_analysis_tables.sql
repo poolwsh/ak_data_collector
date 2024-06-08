@@ -1,5 +1,5 @@
 
-DROP TABLE IF EXISTS da_ak_stock_price_hl;
+
 CREATE TABLE da_ak_stock_price_hl (
     s_code VARCHAR(20) NOT NULL,        -- 股票代码
     td DATE NOT NULL,                   -- 交易日期
@@ -20,7 +20,7 @@ CREATE TABLE da_ak_stock_price_hl (
 );
 SELECT create_hypertable('da_ak_stock_price_hl', 'td');
 
-DROP TABLE IF EXISTS da_ak_stock_price_hl_store;
+
 CREATE TABLE da_ak_stock_price_hl_store (
     s_code VARCHAR(20) NOT NULL,        -- 股票代码
     td DATE NOT NULL,                   -- 交易日期

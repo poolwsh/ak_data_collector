@@ -1,6 +1,6 @@
 
 
-DROP TABLE IF EXISTS dg_ak_index_zh_a_hist_daily;
+
 CREATE TABLE dg_ak_index_zh_a_hist_daily (
     i_code VARCHAR(20) NOT NULL,    -- 股票代码，作为主键的第一部分
     td DATE NOT NULL,             -- 交易日期，作为主键的第二部分
@@ -19,7 +19,8 @@ CREATE TABLE dg_ak_index_zh_a_hist_daily (
 SELECT create_hypertable('dg_ak_index_zh_a_hist_daily', 'td');
 
 
-DROP TABLE IF EXISTS dg_ak_index_zh_a_code_name;
+
+
 CREATE TABLE dg_ak_index_zh_a_code_name (
     i_code VARCHAR(20) NOT NULL PRIMARY KEY, -- 股票代码，作为主键
     i_name VARCHAR(100) NOT NULL,            -- 股票名称

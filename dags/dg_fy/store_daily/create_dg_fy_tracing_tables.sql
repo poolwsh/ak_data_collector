@@ -1,5 +1,6 @@
 
-DROP TABLE IF EXISTS dg_fy_tracing_s_us;
+
+
 CREATE TABLE dg_fy_tracing_s_us (
     symbol VARCHAR NOT NULL,
     last_td DATE,
@@ -10,7 +11,8 @@ CREATE TABLE dg_fy_tracing_s_us (
 );
 
 
-DROP TABLE IF EXISTS fh_dg_s_us_symbol;
+
+
 CREATE TABLE fh_dg_s_us_symbol (
     symbol VARCHAR(20) NOT NULL PRIMARY KEY,  -- 股票代码，作为主键
     currency VARCHAR(10),                     -- 股票交易的货币
@@ -27,7 +29,8 @@ CREATE TABLE fh_dg_s_us_symbol (
 );
 
 
-DROP TABLE IF EXISTS dg_fy_stock_us_trade_date;
+
+
 CREATE TABLE dg_fy_stock_us_trade_date (
     trade_date DATE NOT NULL,
     create_time TIMESTAMP,
@@ -35,7 +38,8 @@ CREATE TABLE dg_fy_stock_us_trade_date (
     PRIMARY KEY (trade_date)
 );
 
-DROP TABLE IF EXISTS dg_fy_stock_us_hist_daily_bfq;
+
+
 CREATE TABLE dg_fy_stock_us_hist_daily_bfq (
     symbol VARCHAR(20) NOT NULL,    -- 股票代码，作为主键的第一部分
     td DATE NOT NULL,               -- 交易日期，作为主键的第二部分

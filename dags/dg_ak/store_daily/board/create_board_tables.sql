@@ -1,4 +1,5 @@
-DROP TABLE IF EXISTS dg_ak_stock_board_concept_name_ths;
+
+
 CREATE TABLE dg_ak_stock_board_concept_name_ths (
     td DATE NOT NULL,
     b_code VARCHAR(50),
@@ -8,7 +9,8 @@ CREATE TABLE dg_ak_stock_board_concept_name_ths (
     PRIMARY KEY (td, b_name)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_board_concept_name_ths_store;
+
+
 CREATE TABLE dg_ak_stock_board_concept_name_ths_store (
     td DATE NOT NULL,
     b_code VARCHAR(50),
@@ -18,7 +20,8 @@ CREATE TABLE dg_ak_stock_board_concept_name_ths_store (
     PRIMARY KEY (td, b_name)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_board_concept_name_em;
+
+
 CREATE TABLE dg_ak_stock_board_concept_name_em (
     td DATE NOT NULL,
     rank INT,
@@ -36,7 +39,8 @@ CREATE TABLE dg_ak_stock_board_concept_name_em (
     PRIMARY KEY (td, b_name)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_board_concept_name_em_store;
+
+
 CREATE TABLE dg_ak_stock_board_concept_name_em_store (
     td DATE NOT NULL,
     rank INT,
@@ -54,7 +58,8 @@ CREATE TABLE dg_ak_stock_board_concept_name_em_store (
     PRIMARY KEY (td, b_name)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_board_industry_summary_ths;
+
+
 CREATE TABLE dg_ak_stock_board_industry_summary_ths (
     td DATE NOT NULL,
     b_name VARCHAR(255),
@@ -71,7 +76,8 @@ CREATE TABLE dg_ak_stock_board_industry_summary_ths (
     PRIMARY KEY (td, b_name)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_board_industry_summary_ths_store;
+
+
 CREATE TABLE dg_ak_stock_board_industry_summary_ths_store (
     td DATE NOT NULL,
     b_name VARCHAR(255),
@@ -88,7 +94,8 @@ CREATE TABLE dg_ak_stock_board_industry_summary_ths_store (
     PRIMARY KEY (td, b_name)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_board_industry_name_em;
+
+
 CREATE TABLE dg_ak_stock_board_industry_name_em (
     td DATE NOT NULL,
     rank INT,
@@ -106,7 +113,8 @@ CREATE TABLE dg_ak_stock_board_industry_name_em (
     PRIMARY KEY (td, b_name)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_board_industry_name_em_store;
+
+
 CREATE TABLE dg_ak_stock_board_industry_name_em_store (
     td DATE NOT NULL,
     rank INT,
@@ -124,7 +132,8 @@ CREATE TABLE dg_ak_stock_board_industry_name_em_store (
     PRIMARY KEY (td, b_name)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_board_concept_cons_ths;
+
+
 CREATE TABLE dg_ak_stock_board_concept_cons_ths (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
@@ -133,7 +142,8 @@ CREATE TABLE dg_ak_stock_board_concept_cons_ths (
     PRIMARY KEY (td, s_code, b_name)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_board_concept_cons_ths_store;
+
+
 CREATE TABLE dg_ak_stock_board_concept_cons_ths_store (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
@@ -142,7 +152,8 @@ CREATE TABLE dg_ak_stock_board_concept_cons_ths_store (
     PRIMARY KEY (td, s_code, b_name)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_board_concept_cons_em;
+
+
 CREATE TABLE dg_ak_stock_board_concept_cons_em (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
@@ -151,7 +162,8 @@ CREATE TABLE dg_ak_stock_board_concept_cons_em (
     PRIMARY KEY (td, s_code, b_name)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_board_concept_cons_em_store;
+
+
 CREATE TABLE dg_ak_stock_board_concept_cons_em_store (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
@@ -160,7 +172,8 @@ CREATE TABLE dg_ak_stock_board_concept_cons_em_store (
     PRIMARY KEY (td, s_code, b_name)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_board_industry_cons_ths;
+
+
 CREATE TABLE dg_ak_stock_board_industry_cons_ths (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
@@ -180,7 +193,8 @@ CREATE TABLE dg_ak_stock_board_industry_cons_ths (
     PRIMARY KEY (td, s_code, b_name)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_board_industry_cons_ths_store;
+
+
 CREATE TABLE dg_ak_stock_board_industry_cons_ths_store (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
@@ -200,7 +214,8 @@ CREATE TABLE dg_ak_stock_board_industry_cons_ths_store (
     PRIMARY KEY (td, s_code, b_name)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_board_industry_cons_em;
+
+
 CREATE TABLE dg_ak_stock_board_industry_cons_em (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
@@ -222,7 +237,8 @@ CREATE TABLE dg_ak_stock_board_industry_cons_em (
     PRIMARY KEY (td, s_code, b_name)
 );
 
-DROP TABLE IF EXISTS dg_ak_stock_board_industry_cons_em_store;
+
+
 CREATE TABLE dg_ak_stock_board_industry_cons_em_store (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
