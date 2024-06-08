@@ -7,9 +7,9 @@ class Config:
 
         self.dag_s_data_hostname = "timescaledb"
         self.dag_s_data_port = "5432"
-        self.dag_s_data_user = "dag_s_data_user"
-        self.dag_s_data_password = "dag_s_data_pw"
-        self.dag_s_data_db_name = 'dag_s_data'
+        self.dag_s_data_user = "dags_data_user"
+        self.dag_s_data_password = "dags_data_pw"
+        self.dag_s_data_db_name = 'dags_data'
 
         self.DEFAULT_EMAIL = "poolwsh@163.com"
         self.DEFAULT_OWNER = "poolwsh"
