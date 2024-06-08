@@ -1,0 +1,68 @@
+version: '3.8'
+
+networks:
+  stock_data_server_network:
+    driver: bridge
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: timescaledb
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_pw
+      TZ: Asia/Shanghai
+    volumes:
+      - ${HOME}/airflow_data/db/timescaledb/data:/var/lib/postgresql/data:rw
+      - ./init_airflow_db.sh:/docker-entrypoint-initdb.d/init_airflow_db.sh
+      - ./init_dags_db.sh:/docker-entrypoint-initdb.d/init_dags_db.sh
+    ports:
+      - "55432:5432"
+    networks:
+      - stock_data_server_network
+    restart: always
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    environment:
+      TZ: Asia/Shanghai
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "redis_pw"]
+    volumes:
+      - ${HOME}/airflow_data/db/redis/config/redis.conf:/usr/local/etc/redis/redis.conf
+      - ${HOME}/airflow_data/db/redis/data:/data/redis
+    ports:
+      - "56379:6379"
+    networks:
+      - stock_data_server_network
+    restart: always
+
+  airflow:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow_user:airflow_pw@timescaledb:5432/airflow_data
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__WEBSERVER__SECRET_KEY=YOUR_GENERATED_SECRET_KEY
+      - AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX=True
+      - AIRFLOW__CORE__EXECUTION_TIMEOUT=60m
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_POOL_RECYCLE=1800
+      - AIRFLOW__CORE__PARALLELISM=3
+      - AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG=3
+      - AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG=3
+      - AIRFLOW__CELERY__WORKER_CONCURRENCY=16
+    volumes:
+      - ../dags:/opt/airflow/dags
+      - ${HOME}/airflow_data/log:/data/airflow/log
+      - ${HOME}/airflow_data/cache:/data/airflow/cache
+      - ../tools/airflow.cfg:/opt/airflow/airflow.cfg
+    networks:
+      - stock_data_server_network
+    ports:
+      - "58080:8080"
+    restart: always
+    depends_on:
+      - timescaledb
+      - redis
