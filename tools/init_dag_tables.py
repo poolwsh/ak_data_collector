@@ -1,6 +1,7 @@
 import os
 import sys
 import glob
+import re
 import psycopg2
 from psycopg2 import sql
 from dags.utils.config import config
@@ -17,6 +18,9 @@ directories_to_scan = [
     os.path.join(project_root, 'dg_ak'),
     os.path.join(project_root, 'dg_fy')
 ]
+
+# 设置执行 SQL 的开关
+drop_tables = False  # 控制是否删除现有表
 
 def get_sql_files(directories):
     logger.debug(f"Scanning directories for SQL files: {directories}")
@@ -36,6 +40,13 @@ def get_sql_files(directories):
     
     return sql_files
 
+def extract_table_names(sql_content):
+    """
+    使用正则表达式从SQL内容中提取所有表名
+    """
+    table_names = re.findall(r'CREATE TABLE (\w+)', sql_content, re.IGNORECASE)
+    return table_names
+
 def execute_sql_file(file_path, conn):
     """
     执行指定 SQL 文件中的内容
@@ -43,10 +54,33 @@ def execute_sql_file(file_path, conn):
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
             sql_content = file.read()
-        logger.info(f"Executing SQL file: {file_path}")
+        
+        # 提取表名并记录日志
+        table_names = extract_table_names(sql_content)
+        if table_names:
+            logger.info(f"Tables found in SQL file {file_path}:\n" + "\n".join(table_names))
+        
+        # 如果启用了 drop_tables 选项，则添加删除表的SQL语句
+        if drop_tables:
+            drop_statements = ""
+            for table_name in table_names:
+                drop_statements += f"DROP TABLE IF EXISTS {table_name};\n"
+            sql_content = drop_statements + sql_content
+            if table_names:
+                logger.info(f"Drop statements added for tables:\n" + "\n".join(table_names))
+        else:
+            if table_names:
+                logger.info(f"Skipping create table statements for tables:\n" + "\n".join(table_names))
+            logger.info(f"Executing non-create table statements in SQL file: {file_path}")
+        
         with conn.cursor() as cur:
             cur.execute(sql.SQL(sql_content))
-        logger.info(f"Successfully executed SQL file: {file_path}")
+        
+        if drop_tables or not table_names:
+            logger.info(f"Successfully executed SQL file: {file_path}")
+        else:
+            logger.info(f"Successfully skipped create table statements in SQL file: {file_path}")
+            
     except Exception as e:
         logger.error(f"Error executing SQL file {file_path}: {e}")
 
