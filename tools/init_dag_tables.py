@@ -19,8 +19,8 @@ directories_to_scan = [
     os.path.join(project_root, 'dg_fy')
 ]
 
-# 设置执行 SQL 的开关
-drop_tables = False  # 控制是否删除现有表
+# 控制是否强制删除现有表并重新创建
+drop_tables = False  
 
 def get_sql_files(directories):
     logger.debug(f"Scanning directories for SQL files: {directories}")
@@ -47,6 +47,37 @@ def extract_table_names(sql_content):
     table_names = re.findall(r'CREATE TABLE (\w+)', sql_content, re.IGNORECASE)
     return table_names
 
+def split_sql_content(sql_content):
+    """
+    根据 CREATE TABLE 关键字对 SQL 文件内容进行分段
+    """
+    segments = re.split(r'(CREATE TABLE \w+.*?;)', sql_content, flags=re.IGNORECASE | re.DOTALL)
+    return [segment for segment in segments if segment.strip()]
+
+def check_table_exists(conn, table_name):
+    """
+    检查表是否存在
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql.SQL("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = %s);"), [table_name])
+            exists = cur.fetchone()[0]
+            return exists
+    except Exception as e:
+        logger.error(f"Error checking if table {table_name} exists: {e}")
+        return False
+
+def execute_sql_segment(conn, sql_segment, table_name):
+    """
+    执行 SQL 片段，包含创建表及相关的附加操作（如创建 hypertable）
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql.SQL(sql_segment))
+            logger.info(f"Successfully executed SQL segment for table: {table_name}")
+    except Exception as e:
+        logger.error(f"Error executing SQL segment for table {table_name}: {e}")
+
 def execute_sql_file(file_path, conn):
     """
     执行指定 SQL 文件中的内容
@@ -60,27 +91,24 @@ def execute_sql_file(file_path, conn):
         if table_names:
             logger.info(f"Tables found in SQL file {file_path}:\n" + "\n".join(table_names))
         
-        # 如果启用了 drop_tables 选项，则添加删除表的SQL语句
-        if drop_tables:
-            drop_statements = ""
-            for table_name in table_names:
-                drop_statements += f"DROP TABLE IF EXISTS {table_name};\n"
-            sql_content = drop_statements + sql_content
-            if table_names:
-                logger.info(f"Drop statements added for tables:\n" + "\n".join(table_names))
-        else:
-            if table_names:
-                logger.info(f"Skipping create table statements for tables:\n" + "\n".join(table_names))
-            logger.info(f"Executing non-create table statements in SQL file: {file_path}")
-        
-        with conn.cursor() as cur:
-            cur.execute(sql.SQL(sql_content))
-        
-        if drop_tables or not table_names:
-            logger.info(f"Successfully executed SQL file: {file_path}")
-        else:
-            logger.info(f"Successfully skipped create table statements in SQL file: {file_path}")
+        segments = split_sql_content(sql_content)
+        for segment in segments:
+            table_name_match = extract_table_names(segment)
+            if not table_name_match:
+                continue
             
+            table_name = table_name_match[0]
+            if drop_tables:
+                logger.info(f"Dropping and creating table: {table_name}")
+                drop_statement = f"DROP TABLE IF EXISTS {table_name};\n"
+                segment = drop_statement + segment
+                execute_sql_segment(conn, segment, table_name)
+            else:
+                if check_table_exists(conn, table_name):
+                    logger.info(f"Skipping create table statement for existing table: {table_name}")
+                else:
+                    logger.info(f"Table {table_name} does not exist, will be created.")
+                    execute_sql_segment(conn, segment, table_name)
     except Exception as e:
         logger.error(f"Error executing SQL file {file_path}: {e}")
 
