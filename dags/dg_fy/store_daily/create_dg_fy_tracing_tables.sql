@@ -13,7 +13,7 @@ CREATE TABLE dg_fy_tracing_s_us (
 
 
 
-CREATE TABLE fh_dg_s_us_symbol (
+CREATE TABLE dg_fh_s_us_symbol (
     symbol VARCHAR(20) NOT NULL PRIMARY KEY,  -- 股票代码，作为主键
     currency VARCHAR(10),                     -- 股票交易的货币
     description TEXT,                         -- 股票的描述或公司名称
