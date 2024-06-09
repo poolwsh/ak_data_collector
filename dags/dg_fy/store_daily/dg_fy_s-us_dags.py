@@ -33,7 +33,7 @@ FAILED_STOCKS_CACHE_PREFIX = "dg_fy_s-us_failed_stocks"
 
 TRACING_TABLE_NAME = 'dg_fy_tracing_s_us'
 TRADE_DATE_TABLE_NAME = 'dg_fy_stock_us_trade_date'
-STOCK_SYMBOL_TABLE = 'fh_dg_s_us_symbol'
+STOCK_SYMBOL_TABLE = 'dg_fh_s_us_symbol'
 STOCK_DATA_KEY = 'stock_us_hist_daily_bfq'
 
 DEBUG_MODE = con.DEBUG_MODE
@@ -235,7 +235,6 @@ def process_batch_data(combined_df, all_trade_dates, conn):
     updates = combined_df.groupby('symbol')['td'].max().reset_index().values.tolist()
     update_tracing_table_bulk(updates)
 
-
 def retry_failed_stocks():
     try:
         logger.info(f"Retrying failed stocks for {STOCK_DATA_KEY}")
@@ -248,7 +247,7 @@ def retry_failed_stocks():
 
         if failed_stocks:
             formatted_failed_stocks = "\n".join([str(index) for index in failed_stocks])
-            raise AirflowException(f"Warning: There are failed indexes that need to be retried:\n{formatted_failed_stocks}")
+            logger.warning(f"Warning: There are failed indexes that need to be retried:\n{formatted_failed_stocks}")
 
     except Exception as e:
         logger.error(f"Failed to retry stocks for {STOCK_DATA_KEY}: {e}")
