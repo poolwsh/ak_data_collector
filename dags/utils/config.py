@@ -23,8 +23,8 @@ class Config:
         self.STOCK_A_REALTIME_KEY = "stock_a_realtime"
         self.INDEX_A_REALTIME_KEY = "index_a_realtime"
 
-        self.LOG_ROOT = '~/data/logs/airflow_dags'
-        self.CACHE_ROOT = '~/data/cache/airflow_dags'
+        self.LOG_ROOT = 'logs/airflow_dags'
+        self.CACHE_ROOT = 'cache/airflow_dags'
 
 # Instantiate the config
 config = Config()

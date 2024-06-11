@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, Float, String, Date, DECIMAL, BigInteger, Numeric, TIMESTAMP
 from sqlalchemy.orm import declarative_base
-from utils.db import db
+from db import db
 
 Base = declarative_base()
 

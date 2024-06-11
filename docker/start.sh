@@ -46,11 +46,15 @@ fi
 # Define the docker-compose command with the correct context
 DOCKER_COMPOSE_CMD="docker-compose -f $PROJECT_ROOT/docker/docker-compose.yml"
 
+# Remove any existing network with the same name
+docker network rm stock_data_server_network || true
+
 # Bring down any existing containers
 $DOCKER_COMPOSE_CMD down
 
-# Build the Docker image
-docker build --no-cache -t my_airflow_image -f "$PROJECT_ROOT/docker/Dockerfile" .
+# Build the Docker images
+docker build --no-cache -t my_airflow_image -f "$PROJECT_ROOT/dags/Dockerfile" .
+docker build --no-cache -t my_api_service_image -f "$PROJECT_ROOT/api_service/Dockerfile" .
 
 # Start Docker Compose services
 $DOCKER_COMPOSE_CMD up -d
@@ -62,6 +66,7 @@ sleep 10
 docker exec -u root $($DOCKER_COMPOSE_CMD ps -q airflow) bash -c "chown -R airflow:root /data/airflow/log && chmod -R 755 /data/airflow/log"
 docker exec -u root $($DOCKER_COMPOSE_CMD ps -q airflow) bash -c "chown -R airflow:root /data/airflow/cache && chmod -R 755 /data/airflow/cache"
 
-# Show logs for timescaledb
+# Show logs for timescaledb and airflow
 $DOCKER_COMPOSE_CMD logs timescaledb
 $DOCKER_COMPOSE_CMD logs airflow
+$DOCKER_COMPOSE_CMD logs api_service

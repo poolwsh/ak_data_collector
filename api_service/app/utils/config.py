@@ -12,6 +12,7 @@ class Config:
     redis_hostname = 'redis'
     redis_port = 6379
 
-    LOG_ROOT = '~/data/logs/airflow_dags'
+    LOG_ROOT = 'logs/api_service'
+    CACHE_ROOT = 'cache/api_service'
 
 config = Config()
