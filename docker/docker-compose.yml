@@ -1,7 +1,7 @@
 version: '3.8'
 
 networks:
-  stock_data_server_network:
+  stock_data_service_network:
     driver: bridge
 
 services:
@@ -19,7 +19,7 @@ services:
     ports:
       - "55432:5432"
     networks:
-      - stock_data_server_network
+      - stock_data_service_network
     restart: always
 
   redis:
@@ -34,7 +34,7 @@ services:
     ports:
       - "56379:6379"
     networks:
-      - stock_data_server_network
+      - stock_data_service_network
     restart: always
 
   airflow:
@@ -59,7 +59,7 @@ services:
       - ${HOME}/airflow_data/cache:/data/airflow/cache
       - ../tools/airflow.cfg:/opt/airflow/airflow.cfg
     networks:
-      - stock_data_server_network
+      - stock_data_service_network
     ports:
       - "58080:8080"
     restart: always
@@ -73,8 +73,8 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://postgres:postgres_pw@timescaledb:5432/your_database_name
     ports:
-      - "8000:8000"
+      - "58000:8000"
     networks:
-      - stock_data_server_network
+      - stock_data_service_network
     depends_on:
       - timescaledb
