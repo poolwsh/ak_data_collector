@@ -9,8 +9,11 @@ from dags.utils.logger import logger
 
 # 获取项目根目录，并将其添加到 sys.path
 current_path = os.path.dirname(os.path.abspath(__file__))
+logger.debug(f'current_path={current_path}')
 project_root = os.path.abspath(os.path.join(current_path, '..', 'dags'))
+logger.debug(f'project_root={project_root}')
 sys.path.append(project_root)
+
 
 # 设置要遍历的目录
 directories_to_scan = [

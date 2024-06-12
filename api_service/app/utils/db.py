@@ -1,8 +1,8 @@
 import redis
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-from config import config as con
-from logger import log
+from utils.config import config as con
+from utils.logger import logger
 
 class RedisEngine(object):
     redis_pool = redis.ConnectionPool(

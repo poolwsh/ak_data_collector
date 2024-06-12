@@ -2,7 +2,7 @@
 import os
 import threading
 import logging
-from config import config as con
+from utils.config import config as con
 from logging.handlers import RotatingFileHandler
 
 def singleton(cls, *args, **kw):

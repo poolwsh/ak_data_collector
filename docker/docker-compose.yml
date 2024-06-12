@@ -40,7 +40,7 @@ services:
   airflow:
     build:
       context: ..
-      dockerfile: airflow/dags/Dockerfile
+      dockerfile: airflow/Dockerfile
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow_user:airflow_pw@timescaledb:5432/airflow_data
@@ -70,9 +70,11 @@ services:
   api_service:
     build:
       context: ..
-      dockerfile: api_service/app/Dockerfile
+      dockerfile: api_service/Dockerfile
     environment:
       DATABASE_URL: postgresql+psycopg2://postgres:postgres_pw@timescaledb:5432/your_database_name
+    volumes:
+      - ../api_service/app:/app 
     ports:
       - "58000:8000"
     networks:

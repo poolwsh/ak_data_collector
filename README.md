@@ -1,2 +1,4 @@
-# ak_data_collector
-collector data using akshare and airflow
+```
+cd $PROJECT_PATH
+./docker/start.sh
+```
