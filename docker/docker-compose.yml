@@ -40,7 +40,7 @@ services:
   airflow:
     build:
       context: ..
-      dockerfile: dags/Dockerfile
+      dockerfile: airflow/dags/Dockerfile
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow_user:airflow_pw@timescaledb:5432/airflow_data
@@ -54,10 +54,10 @@ services:
       - AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG=3
       - AIRFLOW__CELERY__WORKER_CONCURRENCY=16
     volumes:
-      - ../dags:/opt/airflow/dags
+      - ../airflow/dags:/opt/airflow/dags
       - ${HOME}/airflow_data/log:/data/airflow/log
       - ${HOME}/airflow_data/cache:/data/airflow/cache
-      - ../tools/airflow.cfg:/opt/airflow/airflow.cfg
+      - ../airflow/airflow.cfg:/opt/airflow/airflow.cfg
     networks:
       - stock_data_service_network
     ports:
@@ -69,7 +69,8 @@ services:
 
   api_service:
     build:
-      context: ../api_service
+      context: ..
+      dockerfile: api_service/app/Dockerfile
     environment:
       DATABASE_URL: postgresql+psycopg2://postgres:postgres_pw@timescaledb:5432/your_database_name
     ports:

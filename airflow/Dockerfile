@@ -16,14 +16,14 @@ RUN apt-get update && apt-get install -y \
 USER airflow
 
 # Copy tools and install Python packages with increased timeout
-COPY ../tools/ /opt/airflow/tools/
+COPY ./requirements.txt /opt/airflow/tools/requirements.txt
 RUN pip install --no-cache-dir --timeout=1000 -r /opt/airflow/tools/requirements.txt
 
 # Copy dags
-COPY ../dags/ $AIRFLOW_HOME/dags/
+COPY ./dags/ $AIRFLOW_HOME/dags/
 
 # Copy entrypoint.sh
-COPY ../docker/entrypoint.sh /opt/airflow/tools/entrypoint.sh
+COPY ./entrypoint.sh /opt/airflow/tools/entrypoint.sh
 
 # Set the entrypoint
 ENTRYPOINT ["/opt/airflow/tools/entrypoint.sh"]
