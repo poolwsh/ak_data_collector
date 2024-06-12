@@ -1,20 +1,28 @@
 #!/usr/bin/env python
 
 import os
-import re
 import sys
+
+current_path = os.path.abspath(os.path.dirname(__file__))
+sys.path.append(os.path.abspath(os.path.join(current_path, '..')))
+
+import re
+import re
 import warnings
 from sqlalchemy import (
     Column, Integer, Float, String, Date, DECIMAL, BigInteger, Numeric, TIMESTAMP, DateTime
-)        
-from sqlalchemy.ext.declarative import declarative_base
+)
+from sqlalchemy.orm import declarative_base
+from datetime import date, datetime
+from decimal import Decimal
+																			  
 from pydantic import BaseModel
-from logger import logger
+from utils.logger import logger
 
 # Get the absolute path of the current script file
 current_path = os.path.abspath(os.path.dirname(__file__))
 # Construct the absolute path to the DAGS directory
-DAGS_DIR = os.path.abspath(os.path.join(current_path, '..', '..', '..', 'dags'))
+DAGS_DIR = os.path.abspath(os.path.join(current_path, '..', '..', '..', 'airflow', 'dags'))
 # Construct the absolute path to the models.py file
 MODEL_PATH = os.path.abspath(os.path.join(current_path, '..', 'models.py'))
 # Construct the absolute path to the schemas.py file
@@ -72,7 +80,7 @@ def parse_table(sql):
         logger.debug(f'Parsing table: {table_name}')
         columns = []
         pydantic_fields = []
-        for column_def in re.findall(r'(\w+ [A-Z]+(?:\(\d+(?:,\s*\d+)?\))?)', sql):
+        for column_def in re.findall(r'(\w+ \w+(?:\(\d+(?:,\s*\d+)?\))?)', sql):
             parts = column_def.split()
             if len(parts) < 2:
                 logger.warning(f'Invalid column definition: {column_def}')
@@ -112,7 +120,6 @@ def generate_model_class(table_name, columns):
     model = type(table_name.capitalize(), (Base,), attrs)
     return model
 
-
 def generate_pydantic_schema_class(table_name, pydantic_fields):
     logger.debug(f'Generating Pydantic schema class for table: {table_name}')
     base_class = f"{table_name.capitalize()}Base"
@@ -124,27 +131,22 @@ def generate_pydantic_schema_class(table_name, pydantic_fields):
         "int": int,
         "float": float,
         "str": str,
-        "date": Date,
-        "Decimal": DECIMAL,
-        "datetime": DateTime
+        "date": date,
+        "Decimal": Decimal,
+        "datetime": datetime
     }
 
     base_attrs = {name: (eval(p_type, eval_context), ...) for name, p_type in pydantic_fields}
     base_attrs['__annotations__'] = {name: eval(p_type, eval_context) for name, p_type in pydantic_fields}
 
-    # Using ConfigDict for Pydantic v2.0
-    config_dict = {"arbitrary_types_allowed": True}
-
-    base_schema = type(base_class, (BaseModel,), {**base_attrs, 'model_config': config_dict})
+    base_schema = type(base_class, (BaseModel,), base_attrs)
     create_schema = type(create_class, (base_schema,), {})
-    read_schema = type(read_class, (base_schema,), {"model_config": {"from_attributes": True, "arbitrary_types_allowed": True}})
+    read_schema = type(read_class, (base_schema,), {
+        "__module__": __name__,
+        "model_config": {"from_attributes": True}
+    })
 
     return base_schema, create_schema, read_schema
-
-
-
-
-
 
 # Process all SQL files in the directory
 def process_sql_files(directory):
@@ -182,9 +184,9 @@ def main():
     # Writing models to models.py file
     with open(MODEL_PATH, 'w') as f:
         logger.info(f'Writing models to file: {MODEL_PATH}')
-        f.write("from sqlalchemy import Column, Integer, Float, String, Date, DECIMAL, BigInteger, Numeric, TIMESTAMP\n")
+        f.write("from sqlalchemy import Column, Integer, Float, String, Date, DECIMAL, BigInteger, Numeric, TIMESTAMP, DateTime\n")
         f.write("from sqlalchemy.orm import declarative_base\n")
-        f.write("from db import db\n\n")
+        f.write("from utils.db import db\n\n")
         f.write("Base = declarative_base()\n\n")
 
         for model in models:
@@ -205,8 +207,8 @@ def main():
     with open(SCHEMA_PATH, 'w') as f:
         logger.info(f'Writing schemas to file: {SCHEMA_PATH}')
         f.write("from pydantic import BaseModel\n")
-        f.write("from datetime import Date, DateTime\n")
-        f.write("from decimal import DECIMAL\n\n")
+        f.write("from datetime import date, datetime\n")
+        f.write("from decimal import Decimal\n\n")
         for base_schema, create_schema, read_schema in pydantic_schemas:
             logger.debug(f'Writing Pydantic schema: {base_schema.__name__}')
             f.write(f"class {base_schema.__name__}(BaseModel):\n")
@@ -221,9 +223,10 @@ def main():
             
             logger.debug(f'Writing Pydantic schema: {read_schema.__name__}')
             f.write(f"class {read_schema.__name__}({base_schema.__name__}):\n")
-            f.write("    class Config:\n")
-            f.write("        from_attributes = True\n")
+																			
+            f.write("    model_config = {'from_attributes': True}\n")
             f.write("\n")
 
 if __name__ == '__main__':
     main()
+

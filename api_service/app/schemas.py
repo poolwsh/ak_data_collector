@@ -1,25 +1,24 @@
 from pydantic import BaseModel
-from datetime import Date, DateTime
-from decimal import DECIMAL
+from datetime import date, datetime
+from decimal import Decimal
 
 class Da_ak_tracing_stock_price_hlBase(BaseModel):
     s_code: str
-    min_td: Date
-    max_td: Date
-    create_time: DateTime
-    update_time: DateTime
+    min_td: date
+    max_td: date
+    create_time: datetime
+    update_time: datetime
     host_name: str
 
 class Da_ak_tracing_stock_price_hlCreate(Da_ak_tracing_stock_price_hlBase):
     pass
 
 class Da_ak_tracing_stock_price_hlRead(Da_ak_tracing_stock_price_hlBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Da_ak_stock_price_hlBase(BaseModel):
     s_code: str
-    td: Date
+    td: date
     interval: int
     hs_h: float
     hs_l: float
@@ -38,12 +37,11 @@ class Da_ak_stock_price_hlCreate(Da_ak_stock_price_hlBase):
     pass
 
 class Da_ak_stock_price_hlRead(Da_ak_stock_price_hlBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Da_ak_stock_price_hl_storeBase(BaseModel):
     s_code: str
-    td: Date
+    td: date
     interval: int
     hs_h: float
     hs_l: float
@@ -62,89 +60,83 @@ class Da_ak_stock_price_hl_storeCreate(Da_ak_stock_price_hl_storeBase):
     pass
 
 class Da_ak_stock_price_hl_storeRead(Da_ak_stock_price_hl_storeBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_tracing_by_dateBase(BaseModel):
     ak_func_name: str
-    last_td: Date
-    create_time: DateTime
-    update_time: DateTime
+    last_td: date
+    create_time: datetime
+    update_time: datetime
     host_name: str
 
 class Dg_ak_tracing_by_dateCreate(Dg_ak_tracing_by_dateBase):
     pass
 
 class Dg_ak_tracing_by_dateRead(Dg_ak_tracing_by_dateBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_tracing_by_date_1_paramBase(BaseModel):
     ak_func_name: str
     param_name: str
     param_value: str
-    last_td: Date
-    create_time: DateTime
-    update_time: DateTime
+    last_td: date
+    create_time: datetime
+    update_time: datetime
     host_name: str
 
 class Dg_ak_tracing_by_date_1_paramCreate(Dg_ak_tracing_by_date_1_paramBase):
     pass
 
 class Dg_ak_tracing_by_date_1_paramRead(Dg_ak_tracing_by_date_1_paramBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_tracing_by_scode_dateBase(BaseModel):
     ak_func_name: str
     scode: str
-    last_td: Date
-    create_time: DateTime
-    update_time: DateTime
+    last_td: date
+    create_time: datetime
+    update_time: datetime
     host_name: str
 
 class Dg_ak_tracing_by_scode_dateCreate(Dg_ak_tracing_by_scode_dateBase):
     pass
 
 class Dg_ak_tracing_by_scode_dateRead(Dg_ak_tracing_by_scode_dateBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_tracing_s_zh_aBase(BaseModel):
     ak_func_name: str
     scode: str
     period: str
     adjust: str
-    last_td: Date
-    create_time: DateTime
-    update_time: DateTime
+    last_td: date
+    create_time: datetime
+    update_time: datetime
     host_name: str
 
 class Dg_ak_tracing_s_zh_aCreate(Dg_ak_tracing_s_zh_aBase):
     pass
 
 class Dg_ak_tracing_s_zh_aRead(Dg_ak_tracing_s_zh_aBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_tracing_i_zh_aBase(BaseModel):
     ak_func_name: str
     icode: str
     period: str
-    last_td: Date
-    create_time: DateTime
-    update_time: DateTime
+    last_td: date
+    create_time: datetime
+    update_time: datetime
     host_name: str
 
 class Dg_ak_tracing_i_zh_aCreate(Dg_ak_tracing_i_zh_aBase):
     pass
 
 class Dg_ak_tracing_i_zh_aRead(Dg_ak_tracing_i_zh_aBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_board_concept_name_thsBase(BaseModel):
-    td: Date
+    td: date
     b_code: str
     b_name: str
     stock_count: int
@@ -154,11 +146,10 @@ class Dg_ak_stock_board_concept_name_thsCreate(Dg_ak_stock_board_concept_name_th
     pass
 
 class Dg_ak_stock_board_concept_name_thsRead(Dg_ak_stock_board_concept_name_thsBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_board_concept_name_ths_storeBase(BaseModel):
-    td: Date
+    td: date
     b_code: str
     b_name: str
     stock_count: int
@@ -168,141 +159,134 @@ class Dg_ak_stock_board_concept_name_ths_storeCreate(Dg_ak_stock_board_concept_n
     pass
 
 class Dg_ak_stock_board_concept_name_ths_storeRead(Dg_ak_stock_board_concept_name_ths_storeBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_board_concept_name_emBase(BaseModel):
-    td: Date
+    td: date
     rank: int
     b_code: str
     b_name: str
-    c: DECIMAL
-    change_amount: DECIMAL
-    change_percentage: DECIMAL
+    c: Decimal
+    change_amount: Decimal
+    change_percentage: Decimal
     total_mv: int
-    turnover_rate: DECIMAL
+    turnover_rate: Decimal
     risers: int
     fallers: int
     leader_s: str
-    leader_s_change: DECIMAL
+    leader_s_change: Decimal
 
 class Dg_ak_stock_board_concept_name_emCreate(Dg_ak_stock_board_concept_name_emBase):
     pass
 
 class Dg_ak_stock_board_concept_name_emRead(Dg_ak_stock_board_concept_name_emBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_board_concept_name_em_storeBase(BaseModel):
-    td: Date
+    td: date
     rank: int
     b_code: str
     b_name: str
-    c: DECIMAL
-    change_amount: DECIMAL
-    change_percentage: DECIMAL
+    c: Decimal
+    change_amount: Decimal
+    change_percentage: Decimal
     total_mv: int
-    turnover_rate: DECIMAL
+    turnover_rate: Decimal
     risers: int
     fallers: int
     leader_s: str
-    leader_s_change: DECIMAL
+    leader_s_change: Decimal
 
 class Dg_ak_stock_board_concept_name_em_storeCreate(Dg_ak_stock_board_concept_name_em_storeBase):
     pass
 
 class Dg_ak_stock_board_concept_name_em_storeRead(Dg_ak_stock_board_concept_name_em_storeBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_board_industry_summary_thsBase(BaseModel):
-    td: Date
+    td: date
     b_name: str
-    change_percentage: DECIMAL
-    v: DECIMAL
-    a: DECIMAL
-    net_inflow: DECIMAL
+    change_percentage: Decimal
+    v: Decimal
+    a: Decimal
+    net_inflow: Decimal
     risers: int
     fallers: int
-    average_price: DECIMAL
+    average_price: Decimal
     leader_s: str
-    leader_s_price: DECIMAL
-    leader_s_change: DECIMAL
+    leader_s_price: Decimal
+    leader_s_change: Decimal
 
 class Dg_ak_stock_board_industry_summary_thsCreate(Dg_ak_stock_board_industry_summary_thsBase):
     pass
 
 class Dg_ak_stock_board_industry_summary_thsRead(Dg_ak_stock_board_industry_summary_thsBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_board_industry_summary_ths_storeBase(BaseModel):
-    td: Date
+    td: date
     b_name: str
-    change_percentage: DECIMAL
-    v: DECIMAL
-    a: DECIMAL
-    net_inflow: DECIMAL
+    change_percentage: Decimal
+    v: Decimal
+    a: Decimal
+    net_inflow: Decimal
     risers: int
     fallers: int
-    average_price: DECIMAL
+    average_price: Decimal
     leader_s: str
-    leader_s_price: DECIMAL
-    leader_s_change: DECIMAL
+    leader_s_price: Decimal
+    leader_s_change: Decimal
 
 class Dg_ak_stock_board_industry_summary_ths_storeCreate(Dg_ak_stock_board_industry_summary_ths_storeBase):
     pass
 
 class Dg_ak_stock_board_industry_summary_ths_storeRead(Dg_ak_stock_board_industry_summary_ths_storeBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_board_industry_name_emBase(BaseModel):
-    td: Date
+    td: date
     rank: int
     b_code: str
     b_name: str
-    c: DECIMAL
-    change_amount: DECIMAL
-    change_percentage: DECIMAL
+    c: Decimal
+    change_amount: Decimal
+    change_percentage: Decimal
     total_mv: int
-    turnover_rate: DECIMAL
+    turnover_rate: Decimal
     risers: int
     fallers: int
     leader_s: str
-    leader_s_change: DECIMAL
+    leader_s_change: Decimal
 
 class Dg_ak_stock_board_industry_name_emCreate(Dg_ak_stock_board_industry_name_emBase):
     pass
 
 class Dg_ak_stock_board_industry_name_emRead(Dg_ak_stock_board_industry_name_emBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_board_industry_name_em_storeBase(BaseModel):
-    td: Date
+    td: date
     rank: int
     b_code: str
     b_name: str
-    c: DECIMAL
-    change_amount: DECIMAL
-    change_percentage: DECIMAL
+    c: Decimal
+    change_amount: Decimal
+    change_percentage: Decimal
     total_mv: int
-    turnover_rate: DECIMAL
+    turnover_rate: Decimal
     risers: int
     fallers: int
     leader_s: str
-    leader_s_change: DECIMAL
+    leader_s_change: Decimal
 
 class Dg_ak_stock_board_industry_name_em_storeCreate(Dg_ak_stock_board_industry_name_em_storeBase):
     pass
 
 class Dg_ak_stock_board_industry_name_em_storeRead(Dg_ak_stock_board_industry_name_em_storeBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_board_concept_cons_thsBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
     b_name: str
@@ -311,11 +295,10 @@ class Dg_ak_stock_board_concept_cons_thsCreate(Dg_ak_stock_board_concept_cons_th
     pass
 
 class Dg_ak_stock_board_concept_cons_thsRead(Dg_ak_stock_board_concept_cons_thsBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_board_concept_cons_ths_storeBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
     b_name: str
@@ -324,11 +307,10 @@ class Dg_ak_stock_board_concept_cons_ths_storeCreate(Dg_ak_stock_board_concept_c
     pass
 
 class Dg_ak_stock_board_concept_cons_ths_storeRead(Dg_ak_stock_board_concept_cons_ths_storeBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_board_concept_cons_emBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
     b_name: str
@@ -337,11 +319,10 @@ class Dg_ak_stock_board_concept_cons_emCreate(Dg_ak_stock_board_concept_cons_emB
     pass
 
 class Dg_ak_stock_board_concept_cons_emRead(Dg_ak_stock_board_concept_cons_emBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_board_concept_cons_em_storeBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
     b_name: str
@@ -350,11 +331,10 @@ class Dg_ak_stock_board_concept_cons_em_storeCreate(Dg_ak_stock_board_concept_co
     pass
 
 class Dg_ak_stock_board_concept_cons_em_storeRead(Dg_ak_stock_board_concept_cons_em_storeBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_board_industry_cons_thsBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
     b_name: str
@@ -365,11 +345,10 @@ class Dg_ak_stock_board_industry_cons_thsCreate(Dg_ak_stock_board_industry_cons_
     pass
 
 class Dg_ak_stock_board_industry_cons_thsRead(Dg_ak_stock_board_industry_cons_thsBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_board_industry_cons_ths_storeBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
     b_name: str
@@ -380,11 +359,10 @@ class Dg_ak_stock_board_industry_cons_ths_storeCreate(Dg_ak_stock_board_industry
     pass
 
 class Dg_ak_stock_board_industry_cons_ths_storeRead(Dg_ak_stock_board_industry_cons_ths_storeBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_board_industry_cons_emBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
     b_name: str
@@ -394,11 +372,10 @@ class Dg_ak_stock_board_industry_cons_emCreate(Dg_ak_stock_board_industry_cons_e
     pass
 
 class Dg_ak_stock_board_industry_cons_emRead(Dg_ak_stock_board_industry_cons_emBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_board_industry_cons_em_storeBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
     b_name: str
@@ -408,196 +385,187 @@ class Dg_ak_stock_board_industry_cons_em_storeCreate(Dg_ak_stock_board_industry_
     pass
 
 class Dg_ak_stock_board_industry_cons_em_storeRead(Dg_ak_stock_board_industry_cons_em_storeBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_individual_fund_flow_storeBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
-    c: DECIMAL
-    pct_chg: DECIMAL
-    main_net_inflow: DECIMAL
-    main_net_inflow_pct: DECIMAL
-    huge_order_net_inflow: DECIMAL
-    huge_order_net_inflow_pct: DECIMAL
-    large_order_net_inflow: DECIMAL
-    large_order_net_inflow_pct: DECIMAL
-    medium_order_net_inflow: DECIMAL
-    medium_order_net_inflow_pct: DECIMAL
-    small_order_net_inflow: DECIMAL
-    small_order_net_inflow_pct: DECIMAL
+    c: Decimal
+    pct_chg: Decimal
+    main_net_inflow: Decimal
+    main_net_inflow_pct: Decimal
+    huge_order_net_inflow: Decimal
+    huge_order_net_inflow_pct: Decimal
+    large_order_net_inflow: Decimal
+    large_order_net_inflow_pct: Decimal
+    medium_order_net_inflow: Decimal
+    medium_order_net_inflow_pct: Decimal
+    small_order_net_inflow: Decimal
+    small_order_net_inflow_pct: Decimal
 
 class Dg_ak_stock_individual_fund_flow_storeCreate(Dg_ak_stock_individual_fund_flow_storeBase):
     pass
 
 class Dg_ak_stock_individual_fund_flow_storeRead(Dg_ak_stock_individual_fund_flow_storeBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_individual_fund_flow_rank_storeBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
-    latest_price: DECIMAL
-    today_pct_chg: DECIMAL
-    today_main_net_inflow: DECIMAL
-    today_main_net_inflow_pct: DECIMAL
-    today_huge_order_net_inflow: DECIMAL
-    today_huge_order_net_inflow_pct: DECIMAL
-    today_large_order_net_inflow: DECIMAL
-    today_large_order_net_inflow_pct: DECIMAL
-    today_medium_order_net_inflow: DECIMAL
-    today_medium_order_net_inflow_pct: DECIMAL
-    today_small_order_net_inflow: DECIMAL
-    today_small_order_net_inflow_pct: DECIMAL
+    latest_price: Decimal
+    today_pct_chg: Decimal
+    today_main_net_inflow: Decimal
+    today_main_net_inflow_pct: Decimal
+    today_huge_order_net_inflow: Decimal
+    today_huge_order_net_inflow_pct: Decimal
+    today_large_order_net_inflow: Decimal
+    today_large_order_net_inflow_pct: Decimal
+    today_medium_order_net_inflow: Decimal
+    today_medium_order_net_inflow_pct: Decimal
+    today_small_order_net_inflow: Decimal
+    today_small_order_net_inflow_pct: Decimal
 
 class Dg_ak_stock_individual_fund_flow_rank_storeCreate(Dg_ak_stock_individual_fund_flow_rank_storeBase):
     pass
 
 class Dg_ak_stock_individual_fund_flow_rank_storeRead(Dg_ak_stock_individual_fund_flow_rank_storeBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_market_fund_flow_storeBase(BaseModel):
-    td: Date
-    shanghai_closing_price: DECIMAL
-    shanghai_pct_chg: DECIMAL
-    shenzhen_closing_price: DECIMAL
-    shenzhen_pct_chg: DECIMAL
-    main_net_inflow: DECIMAL
-    main_net_inflow_pct: DECIMAL
-    huge_order_net_inflow: DECIMAL
-    huge_order_net_inflow_pct: DECIMAL
-    large_order_net_inflow: DECIMAL
-    large_order_net_inflow_pct: DECIMAL
-    medium_order_net_inflow: DECIMAL
-    medium_order_net_inflow_pct: DECIMAL
-    small_order_net_inflow: DECIMAL
-    small_order_net_inflow_pct: DECIMAL
+    td: date
+    shanghai_closing_price: Decimal
+    shanghai_pct_chg: Decimal
+    shenzhen_closing_price: Decimal
+    shenzhen_pct_chg: Decimal
+    main_net_inflow: Decimal
+    main_net_inflow_pct: Decimal
+    huge_order_net_inflow: Decimal
+    huge_order_net_inflow_pct: Decimal
+    large_order_net_inflow: Decimal
+    large_order_net_inflow_pct: Decimal
+    medium_order_net_inflow: Decimal
+    medium_order_net_inflow_pct: Decimal
+    small_order_net_inflow: Decimal
+    small_order_net_inflow_pct: Decimal
 
 class Dg_ak_stock_market_fund_flow_storeCreate(Dg_ak_stock_market_fund_flow_storeBase):
     pass
 
 class Dg_ak_stock_market_fund_flow_storeRead(Dg_ak_stock_market_fund_flow_storeBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_sector_fund_flow_rank_storeBase(BaseModel):
-    td: Date
+    td: date
     b_name: str
     sector_type: str
-    today_pct_chg: DECIMAL
-    today_main_net_inflow: DECIMAL
-    today_main_net_inflow_pct: DECIMAL
-    today_huge_order_net_inflow: DECIMAL
-    today_huge_order_net_inflow_pct: DECIMAL
-    today_large_order_net_inflow: DECIMAL
-    today_large_order_net_inflow_pct: DECIMAL
-    today_medium_order_net_inflow: DECIMAL
-    today_medium_order_net_inflow_pct: DECIMAL
-    today_small_order_net_inflow: DECIMAL
-    today_small_order_net_inflow_pct: DECIMAL
+    today_pct_chg: Decimal
+    today_main_net_inflow: Decimal
+    today_main_net_inflow_pct: Decimal
+    today_huge_order_net_inflow: Decimal
+    today_huge_order_net_inflow_pct: Decimal
+    today_large_order_net_inflow: Decimal
+    today_large_order_net_inflow_pct: Decimal
+    today_medium_order_net_inflow: Decimal
+    today_medium_order_net_inflow_pct: Decimal
+    today_small_order_net_inflow: Decimal
+    today_small_order_net_inflow_pct: Decimal
     today_main_net_inflow_max_stock: str
 
 class Dg_ak_stock_sector_fund_flow_rank_storeCreate(Dg_ak_stock_sector_fund_flow_rank_storeBase):
     pass
 
 class Dg_ak_stock_sector_fund_flow_rank_storeRead(Dg_ak_stock_sector_fund_flow_rank_storeBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_main_fund_flow_storeBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
-    latest_price: DECIMAL
-    today_main_net_inflow_pct: DECIMAL
+    latest_price: Decimal
+    today_main_net_inflow_pct: Decimal
     today_rank: int
-    today_pct_chg: DECIMAL
-    main_net_inflow_pct_5day: DECIMAL
+    today_pct_chg: Decimal
+    main_net_inflow_pct_5day: Decimal
     rank_5day: int
-    pct_chg_5day: DECIMAL
-    main_net_inflow_pct_10day: DECIMAL
+    pct_chg_5day: Decimal
+    main_net_inflow_pct_10day: Decimal
     rank_10day: int
-    pct_chg_10day: DECIMAL
+    pct_chg_10day: Decimal
     sector: str
 
 class Dg_ak_stock_main_fund_flow_storeCreate(Dg_ak_stock_main_fund_flow_storeBase):
     pass
 
 class Dg_ak_stock_main_fund_flow_storeRead(Dg_ak_stock_main_fund_flow_storeBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_sector_fund_flow_summary_storeBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
     b_name: str
-    latest_price: DECIMAL
-    today_pct_chg: DECIMAL
-    today_main_net_inflow: DECIMAL
-    today_main_net_inflow_pct: DECIMAL
-    today_huge_order_net_inflow: DECIMAL
-    today_huge_order_net_inflow_pct: DECIMAL
-    today_large_order_net_inflow: DECIMAL
-    today_large_order_net_inflow_pct: DECIMAL
-    today_medium_order_net_inflow: DECIMAL
-    today_medium_order_net_inflow_pct: DECIMAL
-    today_small_order_net_inflow: DECIMAL
-    today_small_order_net_inflow_pct: DECIMAL
+    latest_price: Decimal
+    today_pct_chg: Decimal
+    today_main_net_inflow: Decimal
+    today_main_net_inflow_pct: Decimal
+    today_huge_order_net_inflow: Decimal
+    today_huge_order_net_inflow_pct: Decimal
+    today_large_order_net_inflow: Decimal
+    today_large_order_net_inflow_pct: Decimal
+    today_medium_order_net_inflow: Decimal
+    today_medium_order_net_inflow_pct: Decimal
+    today_small_order_net_inflow: Decimal
+    today_small_order_net_inflow_pct: Decimal
 
 class Dg_ak_stock_sector_fund_flow_summary_storeCreate(Dg_ak_stock_sector_fund_flow_summary_storeBase):
     pass
 
 class Dg_ak_stock_sector_fund_flow_summary_storeRead(Dg_ak_stock_sector_fund_flow_summary_storeBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_sector_fund_flow_hist_storeBase(BaseModel):
-    td: Date
+    td: date
     b_name: str
-    main_net_inflow: DECIMAL
-    main_net_inflow_pct: DECIMAL
-    huge_order_net_inflow: DECIMAL
-    huge_order_net_inflow_pct: DECIMAL
-    large_order_net_inflow: DECIMAL
-    large_order_net_inflow_pct: DECIMAL
-    medium_order_net_inflow: DECIMAL
-    medium_order_net_inflow_pct: DECIMAL
-    small_order_net_inflow: DECIMAL
-    small_order_net_inflow_pct: DECIMAL
+    main_net_inflow: Decimal
+    main_net_inflow_pct: Decimal
+    huge_order_net_inflow: Decimal
+    huge_order_net_inflow_pct: Decimal
+    large_order_net_inflow: Decimal
+    large_order_net_inflow_pct: Decimal
+    medium_order_net_inflow: Decimal
+    medium_order_net_inflow_pct: Decimal
+    small_order_net_inflow: Decimal
+    small_order_net_inflow_pct: Decimal
 
 class Dg_ak_stock_sector_fund_flow_hist_storeCreate(Dg_ak_stock_sector_fund_flow_hist_storeBase):
     pass
 
 class Dg_ak_stock_sector_fund_flow_hist_storeRead(Dg_ak_stock_sector_fund_flow_hist_storeBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_concept_fund_flow_hist_storeBase(BaseModel):
-    td: Date
+    td: date
     b_name: str
-    main_net_inflow: DECIMAL
-    main_net_inflow_pct: DECIMAL
-    huge_order_net_inflow: DECIMAL
-    huge_order_net_inflow_pct: DECIMAL
-    large_order_net_inflow: DECIMAL
-    large_order_net_inflow_pct: DECIMAL
-    medium_order_net_inflow: DECIMAL
-    medium_order_net_inflow_pct: DECIMAL
-    small_order_net_inflow: DECIMAL
-    small_order_net_inflow_pct: DECIMAL
+    main_net_inflow: Decimal
+    main_net_inflow_pct: Decimal
+    huge_order_net_inflow: Decimal
+    huge_order_net_inflow_pct: Decimal
+    large_order_net_inflow: Decimal
+    large_order_net_inflow_pct: Decimal
+    medium_order_net_inflow: Decimal
+    medium_order_net_inflow_pct: Decimal
+    small_order_net_inflow: Decimal
+    small_order_net_inflow_pct: Decimal
 
 class Dg_ak_stock_concept_fund_flow_hist_storeCreate(Dg_ak_stock_concept_fund_flow_hist_storeBase):
     pass
 
 class Dg_ak_stock_concept_fund_flow_hist_storeRead(Dg_ak_stock_concept_fund_flow_hist_storeBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_hold_num_cninfoBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
     cur_sh: int
@@ -611,11 +579,10 @@ class Dg_ak_stock_hold_num_cninfoCreate(Dg_ak_stock_hold_num_cninfoBase):
     pass
 
 class Dg_ak_stock_hold_num_cninfoRead(Dg_ak_stock_hold_num_cninfoBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_hold_num_cninfo_storeBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
     cur_sh: int
@@ -629,12 +596,11 @@ class Dg_ak_stock_hold_num_cninfo_storeCreate(Dg_ak_stock_hold_num_cninfo_storeB
     pass
 
 class Dg_ak_stock_hold_num_cninfo_storeRead(Dg_ak_stock_hold_num_cninfo_storeBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_index_zh_a_hist_dailyBase(BaseModel):
     i_code: str
-    td: Date
+    td: date
     o: float
     c: float
     h: float
@@ -649,12 +615,11 @@ class Dg_ak_index_zh_a_hist_dailyCreate(Dg_ak_index_zh_a_hist_dailyBase):
     pass
 
 class Dg_ak_index_zh_a_hist_dailyRead(Dg_ak_index_zh_a_hist_dailyBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_zh_a_hist_daily_bfqBase(BaseModel):
     s_code: str
-    td: Date
+    td: date
     o: float
     c: float
     h: float
@@ -669,12 +634,11 @@ class Dg_ak_stock_zh_a_hist_daily_bfqCreate(Dg_ak_stock_zh_a_hist_daily_bfqBase)
     pass
 
 class Dg_ak_stock_zh_a_hist_daily_bfqRead(Dg_ak_stock_zh_a_hist_daily_bfqBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_zh_a_hist_daily_hfqBase(BaseModel):
     s_code: str
-    td: Date
+    td: date
     o: float
     c: float
     h: float
@@ -689,23 +653,21 @@ class Dg_ak_stock_zh_a_hist_daily_hfqCreate(Dg_ak_stock_zh_a_hist_daily_hfqBase)
     pass
 
 class Dg_ak_stock_zh_a_hist_daily_hfqRead(Dg_ak_stock_zh_a_hist_daily_hfqBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_zh_a_trade_dateBase(BaseModel):
-    trade_date: Date
-    create_time: DateTime
-    update_time: DateTime
+    trade_date: date
+    create_time: datetime
+    update_time: datetime
 
 class Dg_ak_stock_zh_a_trade_dateCreate(Dg_ak_stock_zh_a_trade_dateBase):
     pass
 
 class Dg_ak_stock_zh_a_trade_dateRead(Dg_ak_stock_zh_a_trade_dateBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_zt_pool_dtgc_emBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
     pct_chg: float
@@ -723,11 +685,10 @@ class Dg_ak_stock_zt_pool_dtgc_emCreate(Dg_ak_stock_zt_pool_dtgc_emBase):
     pass
 
 class Dg_ak_stock_zt_pool_dtgc_emRead(Dg_ak_stock_zt_pool_dtgc_emBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_zt_pool_emBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
     pct_chg: float
@@ -744,19 +705,18 @@ class Dg_ak_stock_zt_pool_emCreate(Dg_ak_stock_zt_pool_emBase):
     pass
 
 class Dg_ak_stock_zt_pool_emRead(Dg_ak_stock_zt_pool_emBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_zt_pool_previous_emBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
     pct_chg: float
     c: float
     zt_price: float
     a: float
-    circulation_mv: DECIMAL
-    total_mv: DECIMAL
+    circulation_mv: Decimal
+    total_mv: Decimal
     turnover_rate: float
     increase_speed: float
     amplitude: float
@@ -768,19 +728,18 @@ class Dg_ak_stock_zt_pool_previous_emCreate(Dg_ak_stock_zt_pool_previous_emBase)
     pass
 
 class Dg_ak_stock_zt_pool_previous_emRead(Dg_ak_stock_zt_pool_previous_emBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_zt_pool_strong_emBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
     pct_chg: float
     c: float
     zt_price: float
     a: float
-    circulation_mv: DECIMAL
-    total_mv: DECIMAL
+    circulation_mv: Decimal
+    total_mv: Decimal
     turnover_rate: float
     increase_speed: float
     quantity_ratio: float
@@ -792,23 +751,22 @@ class Dg_ak_stock_zt_pool_strong_emCreate(Dg_ak_stock_zt_pool_strong_emBase):
     pass
 
 class Dg_ak_stock_zt_pool_strong_emRead(Dg_ak_stock_zt_pool_strong_emBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_zt_pool_sub_new_emBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
     pct_chg: float
     c: float
     zt_price: float
     a: float
-    circulation_mv: DECIMAL
-    total_mv: DECIMAL
+    circulation_mv: Decimal
+    total_mv: Decimal
     turnover_rate: float
     days_since_open: int
-    open_date: Date
-    ipo_date: Date
+    open_date: date
+    ipo_date: date
     zt_stat: str
     industry: str
 
@@ -816,19 +774,18 @@ class Dg_ak_stock_zt_pool_sub_new_emCreate(Dg_ak_stock_zt_pool_sub_new_emBase):
     pass
 
 class Dg_ak_stock_zt_pool_sub_new_emRead(Dg_ak_stock_zt_pool_sub_new_emBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_ak_stock_zt_pool_zbgc_emBase(BaseModel):
-    td: Date
+    td: date
     s_code: str
     s_name: str
     pct_chg: float
     c: float
     zt_price: float
     a: float
-    circulation_mv: DECIMAL
-    total_mv: DECIMAL
+    circulation_mv: Decimal
+    total_mv: Decimal
     turnover_rate: float
     increase_speed: float
     failed_account: int
@@ -840,38 +797,35 @@ class Dg_ak_stock_zt_pool_zbgc_emCreate(Dg_ak_stock_zt_pool_zbgc_emBase):
     pass
 
 class Dg_ak_stock_zt_pool_zbgc_emRead(Dg_ak_stock_zt_pool_zbgc_emBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_fy_tracing_s_usBase(BaseModel):
     symbol: str
-    last_td: Date
-    create_time: DateTime
-    update_time: DateTime
+    last_td: date
+    create_time: datetime
+    update_time: datetime
     host_name: str
 
 class Dg_fy_tracing_s_usCreate(Dg_fy_tracing_s_usBase):
     pass
 
 class Dg_fy_tracing_s_usRead(Dg_fy_tracing_s_usBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_fy_stock_us_trade_dateBase(BaseModel):
-    trade_date: Date
-    create_time: DateTime
-    update_time: DateTime
+    trade_date: date
+    create_time: datetime
+    update_time: datetime
 
 class Dg_fy_stock_us_trade_dateCreate(Dg_fy_stock_us_trade_dateBase):
     pass
 
 class Dg_fy_stock_us_trade_dateRead(Dg_fy_stock_us_trade_dateBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 
 class Dg_fy_stock_us_hist_daily_bfqBase(BaseModel):
     symbol: str
-    td: Date
+    td: date
     o: float
     c: float
     h: float
@@ -885,6 +839,5 @@ class Dg_fy_stock_us_hist_daily_bfqCreate(Dg_fy_stock_us_hist_daily_bfqBase):
     pass
 
 class Dg_fy_stock_us_hist_daily_bfqRead(Dg_fy_stock_us_hist_daily_bfqBase):
-    class Config:
-        from_attributes = True
+    model_config = {'from_attributes': True}
 

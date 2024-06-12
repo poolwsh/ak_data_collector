@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, String, Date, DECIMAL, BigInteger, Numeric, TIMESTAMP
+from sqlalchemy import Column, Integer, Float, String, Date, DECIMAL, BigInteger, Numeric, TIMESTAMP, DateTime
 from sqlalchemy.orm import declarative_base
 from utils.db import db
 
