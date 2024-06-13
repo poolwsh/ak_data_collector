@@ -11,7 +11,6 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.utils.dates import days_ago
 from datetime import timedelta
 
-# 动态添加项目根目录到Python路径
 current_path = Path(__file__).resolve().parent 
 project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..'))
 sys.path.append(project_root)
@@ -21,14 +20,10 @@ from dags.utils.db import PGEngine, task_cache_conn
 from dags.utils.logger import logger
 from dags.da_ak.utils.da_ak_config import daak_config as con
 
-# 配置日志调试开关
 DEBUG_MODE = con.DEBUG_MODE
 
-# 配置数据库连接
 pg_conn = PGEngine.get_conn()
 
-
-# 定义常量
 PRICE_HL_TABLE_NAME = 'da_ak_stock_price_hl_store'
 TEMP_PRICE_HL_TABLE_NAME = 'da_ak_stock_price_hl'
 TRACING_TABLE_NAME = 'da_ak_tracing_stock_price_hl'
@@ -77,16 +72,13 @@ def insert_or_update_data_from_csv(csv_path):
     try:
         raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
         _cursor = raw_conn.cursor()
-        
-        # 清空临时表
+ 
         clear_table(raw_conn, TEMP_PRICE_HL_TABLE_NAME)
-        
-        # 导入CSV到临时表
+
         with open(csv_path, 'r') as _file:
             _copy_sql = f"COPY {TEMP_PRICE_HL_TABLE_NAME} FROM STDIN WITH CSV HEADER DELIMITER ','"
             _cursor.copy_expert(sql=_copy_sql, file=_file)
-        
-        # 插入或更新正式表
+
         _cursor.execute(f"""
             INSERT INTO {PRICE_HL_TABLE_NAME} 
             SELECT * FROM {TEMP_PRICE_HL_TABLE_NAME}
@@ -105,7 +97,6 @@ def insert_or_update_data_from_csv(csv_path):
                 pct_chg_to_tg = EXCLUDED.pct_chg_to_tg
         """)
         
-        # 提交事务
         raw_conn.commit()
         logger.info(f"Data from {csv_path} successfully loaded and updated into {PRICE_HL_TABLE_NAME}.")
         
@@ -166,7 +157,6 @@ def generate_fibonacci_intervals(n: int) -> list[int]:
 
 def process_and_store_data():
     logger.info("Starting to process and store data.")
-    # 获取股票列表
     s_code_name_list = dauf.get_s_code_name_list(task_cache_conn)
     if not DEBUG_MODE:
         random.shuffle(s_code_name_list)
@@ -174,9 +164,7 @@ def process_and_store_data():
     for index, stock_code in enumerate(s_code_name_list):
         logger.info(f"Processing {index + 1}/{len(s_code_name_list)}: {stock_code}")
         s_code = stock_code[0]
-        s_name = stock_code[1]
 
-        # 获取追踪数据
         min_td, max_td = get_tracing_data(s_code)
 
         stock_data_df = get_stock_data(s_code)
@@ -186,7 +174,6 @@ def process_and_store_data():
         
         current_min_td, current_max_td = stock_data_df['td'].min(), stock_data_df['td'].max()
 
-        # 如果当前数据已经计算过了，则跳过
         if min_td == current_min_td and max_td == current_max_td:
             logger.info(f"Data for s_code {s_code} already processed. Skipping.")
             continue
@@ -197,7 +184,6 @@ def process_and_store_data():
         intervals = generate_fibonacci_intervals(len(stock_data_df))
         price_hl_df = process_stock_data_internal(s_code, stock_data_df, intervals)
 
-        # 将 "NULL" 替换为空字符串，以便正确处理 NULL 值
         price_hl_df = price_hl_df.replace("NULL", "")
         
         csv_file_path = os.path.join(CSV_ROOT, f'{s_code}.csv')

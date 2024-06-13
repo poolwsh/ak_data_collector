@@ -5,7 +5,6 @@ from pathlib import Path
 current_path = Path(__file__).resolve().parent 
 project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..'))
 print(project_root)
-# 将项目根目录添加到sys.path中
 sys.path.append(project_root)
 
 import time
@@ -83,7 +82,7 @@ class DgAkUtilFuncs(AkUtilTools):
             else:
                 _warning_msg = f'No data found for {ak_func_name} with params(i_code={i_code}, period={period}, start_date={start_date}, end_date={end_date}).'
                 logger.warning(_warning_msg)
-            return pd.DataFrame()  # 返回空的 DataFrame，以避免进一步的处理出错
+            return pd.DataFrame() 
 
         if DEBUG_MODE:
             logger.debug(f"Removing unnecessary columns for ak_func_name: {ak_func_name}")
@@ -124,7 +123,7 @@ class DgAkUtilFuncs(AkUtilTools):
             else:
                 _warning_msg = f'No data found for {ak_func_name} with params(s_code={s_code}, period={period}, start_date={start_date}, end_date={end_date}, adjust={adjust}).'
                 logger.warning(_warning_msg)
-            return pd.DataFrame()  # 返回空的 DataFrame，以避免进一步的处理出错
+            return pd.DataFrame()  
 
         if DEBUG_MODE:
             logger.debug(f"Removing unnecessary columns for ak_func_name: {ak_func_name}")
@@ -159,58 +158,6 @@ class DgAkUtilFuncs(AkUtilTools):
             except Exception as _e:
                 logger.error(f"Failed to retrieve trade dates: {_e}")
                 raise AirflowException(f"Failed to retrieve trade dates: {_e}")
-
-
-
-    # @staticmethod
-    # def is_valid_date(date, ak_func_name):
-    #     try:
-    #         _ak_func = getattr(ak, ak_func_name, None)
-    #         if _ak_func:
-    #             _ak_func(date=date)
-    #         return True
-    #     except ValueError as ve:
-    #         if "Length mismatch" in str(ve):
-    #             logger.warning(f"Date {date} is out of range for function {ak_func_name}")
-    #             return False
-    #     except Exception as e:
-    #         logger.error(f"Error validating date {date} for function {ak_func_name}: {e}")
-    #         return False
-    #     return True
-
-    # @staticmethod
-    # def get_data_and_save2csv(redis_key, ak_func_name, ak_cols_config_dict, pg_conn, redis_conn, temp_dir=con.CACHE_ROOT):
-    #     if DEBUG_MODE:
-    #         logger.debug(f"Fetching data for redis_key: {redis_key}, ak_func_name: {ak_func_name}")
-    #     _table_name = f"dg_ak_{ak_func_name}"
-    #     _date_df = DgAkUtilFuncs.read_df_from_redis(redis_key, redis_conn)
-
-    #     _date_list = [DgAkUtilFuncs.format_td8(_date) for _date in _date_df['td'].sort_values(ascending=False).tolist()]
-    #     if DEBUG_MODE:
-    #         logger.debug(f"date_list length: {len(_date_list)}, first 5 dates: {_date_list[:5]}")
-        
-    #     # Check if dates are within the valid range
-    #     _date_list = [date for date in _date_list if DgAkUtilFuncs.is_valid_date(date, ak_func_name)]
-
-    #     _ak_data_df = DgAkUtilFuncs.get_data_by_td_list(ak_func_name, ak_cols_config_dict, _date_list)
-        
-    #     # Flatten the tuple list into column names
-    #     _desired_columns = [col[0] for col in DgAkUtilFuncs.get_columns_from_table(pg_conn, _table_name, redis_conn)]
-        
-    #     try:
-    #         _ak_data_df = _ak_data_df[_desired_columns]
-    #     except KeyError as e:
-    #         logger.error(f"KeyError while selecting columns for {ak_func_name}: {str(e)}")
-    #         raise
-
-    #     os.makedirs(temp_dir, exist_ok=True)
-    #     _temp_csv_path = os.path.join(temp_dir, f'{ak_func_name}.csv')
-    #     _ak_data_df.to_csv(_temp_csv_path, index=False, header=False)
-
-    #     if DEBUG_MODE:
-    #         logger.debug(f"Data saved to CSV at {_temp_csv_path}, length: {len(_ak_data_df)}, first 5 rows: {_ak_data_df.head().to_dict(orient='records')}")
-    #     return _temp_csv_path
-
 
     @staticmethod
     def try_to_call(
@@ -328,7 +275,7 @@ class DgAkUtilFuncs(AkUtilTools):
             else:
                 _warning_msg = f'No data found for {ak_func_name} on {td}.'
                 logger.warning(_warning_msg)
-            return pd.DataFrame()  # 返回空的 DataFrame，以避免进一步的处理出错
+            return pd.DataFrame() 
 
         _df = DgAkUtilFuncs.remove_cols(_df, ak_cols_config_dict[ak_func_name])
         _df.rename(columns=DgAkUtilFuncs.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
@@ -404,41 +351,6 @@ class DgAkUtilFuncs(AkUtilTools):
         else:
             return pd.DataFrame()  # Return an empty DataFrame if no data was fetched
     # endregion tool funcs
-
-    # region cache tools
-
-    # @staticmethod
-    # def download_and_cache_ak_data_by_td(
-    #         ak_func_name: str,
-    #         td: Union[str, date],
-    #         redis_conn: redis.Redis,
-    #         ttl: int = con.DEFAULT_REDIS_TTL
-    # ) -> str:
-    #     try:
-    #         _td = DgAkUtilFuncs.format_td8(td)
-    #     except Exception as _e:
-    #         logger.error(f"Error formatting date '{td}': {_e}\n{traceback.format_exc()}")
-    #         raise AirflowException(f"Error formatting date '{td}': {_e}")
-
-    #     try:
-    #         _df = DgAkUtilFuncs.get_data_by_td(ak_func_name, _td)
-    #         if _df is None or _df.empty:
-    #             if _df is None:
-    #                 logger.error(f"Failed to obtain data for {ak_func_name} on {_td}.")
-    #                 raise AirflowException(f"Failed to obtain data for {ak_func_name} on {_td}.")
-    #             else:
-    #                 logger.warning(f"No data found for {ak_func_name} on {_td}, nothing written to Redis.")
-    #                 return
-    #         _redis_key = f'{ak_func_name}@{_td}'
-    #         DgAkUtilFuncs.write_df_to_redis(_redis_key, _df, redis_conn, ttl)
-    #         logger.info(f"Data for {ak_func_name} on {_td} written to Redis.")
-    #         if DEBUG_MODE:
-    #             logger.debug(f"Redis key: {_redis_key}, Data length: {len(_df)}, first 5 rows: {_df.head().to_dict(orient='records')}")
-    #         return _redis_key
-    #     except Exception as _e:
-    #         logger.error(f"Error processing data for {ak_func_name} on {_td}: {_e}\n{traceback.format_exc()}")
-    #         raise AirflowException(f"Error processing data for {ak_func_name} on {_td}: {_e}")
-    # endregion cache tools
 
     # region store once
     @staticmethod

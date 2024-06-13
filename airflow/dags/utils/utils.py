@@ -21,7 +21,7 @@ class UtilTools(object):
     def json2dict(json_str):
         return js.loads(json_str)
 
-    # a中有， b中没有
+    # Present in a, but not in b
     # result_list = list_a - list_b
     @staticmethod
     def list_diff(list_a, list_b):
@@ -77,7 +77,6 @@ class UtilTools(object):
         if isinstance(td, date):
             return td.strftime('%Y%m%d')
         if isinstance(td, str):
-            # 处理标准日期格式
             try:
                 if 'T' in td:
                     td = td.split('T')[0]
@@ -85,7 +84,6 @@ class UtilTools(object):
                 return date_obj.strftime('%Y%m%d')
             except ValueError:
                 pass
-            # 处理无分隔符的日期格式
             try:
                 date_obj = datetime.strptime(td, '%Y%m%d')
                 return date_obj.strftime('%Y%m%d')
@@ -98,7 +96,6 @@ class UtilTools(object):
         if isinstance(td, date):
             return td.strftime('%Y-%m-%d')
         if isinstance(td, str):
-            # 处理标准日期格式
             try:
                 if 'T' in td:
                     td = td.split('T')[0]
@@ -106,7 +103,6 @@ class UtilTools(object):
                 return date_obj.strftime('%Y-%m-%d')
             except ValueError:
                 pass
-            # 处理无分隔符的日期格式
             try:
                 date_obj = datetime.strptime(td, '%Y%m%d')
                 return date_obj.strftime('%Y-%m-%d')

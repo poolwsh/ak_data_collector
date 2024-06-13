@@ -49,10 +49,10 @@ class AkUtilTools(UtilTools):
                     return _df['s_code']
                 else:
                     logger.error("Failed to fetch or process data from the source.")
-                    return pd.Series()  # 返回一个空的序列以避免进一步错误
+                    return pd.Series() 
             except Exception as _inner_e:
                 logger.error(f"Error while fetching or writing data: {_inner_e}")
-                raise  # 可能需要重新抛出异常或处理错误
+                raise 
 
     @staticmethod
     def get_s_code_name_list(redis_conn: redis.Redis, ttl: int = 60 * 60):
@@ -91,7 +91,7 @@ class AkUtilTools(UtilTools):
                 return []
         except Exception as _inner_e:
             logger.error(f"Error while fetching or writing data: {_inner_e}")
-            raise  # 重新抛出异常或处理错误
+            raise  
 
     @staticmethod
     def save_data_to_csv(df, filename, dir_path=con.CACHE_ROOT, include_header=True):

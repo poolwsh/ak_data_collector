@@ -1,30 +1,30 @@
 #!/bin/bash
 
-# 设置BASE_DIR变量
+# Set the BASE_DIR variable
 BASE_DIR="$HOME/airflow_data"
 
-# 定义需要清空的目录
+# Define the directories to be cleared
 directories=(
     "$BASE_DIR/db/redis"
     "$BASE_DIR/db/timescaledb"
 )
 
-# 确认清空操作
-read -p "您确定要清空以下目录中的所有数据吗？(y/n): " confirm
+# Confirm the clear operation
+read -p "Are you sure you want to clear all data in the following directories? (y/n): " confirm
 if [[ "$confirm" != "y" ]]; then
-  echo "操作已取消。"
+  echo "Operation canceled."
   exit 0
 fi
 
-# 清空目录
+# Clear the directories
 for dir in "${directories[@]}"; do
   if [ -d "$dir" ]; then
-    echo "清空目录: $dir"
+    echo "Clearing directory: $dir"
     sudo rm -rf "$dir"/*
-    echo "$dir 清空完成。"
+    echo "$dir cleared."
   else
-    echo "目录不存在: $dir"
+    echo "Directory does not exist: $dir"
   fi
 done
 
-echo "所有指定目录已清空。"
+echo "All specified directories have been cleared."

@@ -14,18 +14,18 @@ CREATE TABLE dg_fy_tracing_s_us (
 
 
 CREATE TABLE dg_fh_s_us_symbol (
-    symbol VARCHAR(20) NOT NULL PRIMARY KEY,  -- 股票代码，作为主键
-    currency VARCHAR(10),                     -- 股票交易的货币
-    description TEXT,                         -- 股票的描述或公司名称
-    displaySymbol VARCHAR(20),                -- 股票在交易所显示的符号
-    figi VARCHAR(50),                         -- 金融工具全球标识符
-    isin VARCHAR(50),                         -- 国际证券识别码
-    mic VARCHAR(20),                          -- 市场识别码
-    shareClassFIGI VARCHAR(50),               -- 股票类别的FIGI
-    symbol2 VARCHAR(20),                      -- 备用符号
-    type VARCHAR(50),                         -- 股票的类型
-    create_time TIMESTAMP,                    -- 创建时间
-    update_time TIMESTAMP                     -- 更新时间
+    symbol VARCHAR(20) NOT NULL PRIMARY KEY,
+    currency VARCHAR(10),                   
+    description TEXT,                       
+    displaySymbol VARCHAR(20),               
+    figi VARCHAR(50),                       
+    isin VARCHAR(50),                        
+    mic VARCHAR(20),                         
+    shareClassFIGI VARCHAR(50),              
+    symbol2 VARCHAR(20),                    
+    type VARCHAR(50),                      
+    create_time TIMESTAMP,                  
+    update_time TIMESTAMP                  
 );
 
 

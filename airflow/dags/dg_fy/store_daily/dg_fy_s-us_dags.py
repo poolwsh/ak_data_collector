@@ -39,8 +39,8 @@ STOCK_DATA_KEY = 'stock_us_hist_daily_bfq'
 DEBUG_MODE = con.DEBUG_MODE
 DEFAULT_END_DATE = dguf.format_td10(datetime.now())
 DEFAULT_START_DATE = con.US_DEFAULT_START_DATE
-BATCH_SIZE = 50000  # 处理的数据总行数阈值
-ROLLBACK_DAYS = 15  # 回滚天数
+BATCH_SIZE = 50000  
+ROLLBACK_DAYS = 15
 
 
 
@@ -191,11 +191,9 @@ def process_stock_data():
                 else:
                     failed_stocks.append(arg_list[index])
 
-                # 如果达到批次大小，处理并清空缓存
                 if total_rows >= BATCH_SIZE or (index + 1) == total_codes:
                     _combined_df = pd.concat(all_data, ignore_index=True)
                     process_batch_data(_combined_df, all_trade_dates, conn)
-                    # 清空缓存
                     all_data = []
                     total_rows = 0
                     all_trade_dates.clear()
@@ -204,7 +202,6 @@ def process_stock_data():
                 logger.error(f"Failed to process data for s_code={s_code}: {e}")
                 failed_stocks.append(arg_list[index])
 
-        # 将出错的个股代码写入 Redis
         if failed_stocks:
             dguf.write_list_to_redis(FAILED_STOCKS_CACHE_PREFIX, failed_stocks, task_cache_conn)
             logger.info(f"Failed stocks: {failed_stocks}")
@@ -231,7 +228,6 @@ def process_batch_data(combined_df, all_trade_dates, conn):
         raise AirflowException(f"No CSV file created for {STOCK_DATA_KEY}, skipping database insertion.")
     dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_fy_{STOCK_DATA_KEY}', task_cache_conn)
     update_trade_dates(conn, all_trade_dates)
-    # 按symbol分组，计算每组的最大交易日期
     updates = combined_df.groupby('symbol')['td'].max().reset_index().values.tolist()
     update_tracing_table_bulk(updates)
 

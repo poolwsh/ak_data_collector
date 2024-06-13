@@ -5,7 +5,7 @@ from pathlib import Path
 current_path = Path(__file__).resolve().parent 
 project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..'))
 print(project_root)
-# 将项目根目录添加到sys.path中
+
 sys.path.append(project_root)
 
 

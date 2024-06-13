@@ -2,19 +2,19 @@
 
 
 CREATE TABLE dg_ak_index_zh_a_hist_daily (
-    i_code VARCHAR(20) NOT NULL,    -- 股票代码，作为主键的第一部分
-    td DATE NOT NULL,             -- 交易日期，作为主键的第二部分
-    o FLOAT,                        -- 开盘价
-    c FLOAT,                        -- 收盘价
-    h FLOAT,                        -- 最高价
-    l FLOAT,                        -- 最低价
-    v BIGINT,                       -- 成交量
-    a NUMERIC(18, 2),               -- 成交额
-    amplitude FLOAT,                -- 振幅
-    pct_chg FLOAT,                  -- 涨跌幅
-    change FLOAT,                   -- 涨跌额
-    turnover_rate FLOAT,            -- 换手率
-    PRIMARY KEY (i_code, td)      -- 组合主键：股票代码和交易日期
+    i_code VARCHAR(20) NOT NULL,   
+    td DATE NOT NULL,            
+    o FLOAT,                    
+    c FLOAT,                    
+    h FLOAT,                   
+    l FLOAT,                    
+    v BIGINT,                  
+    a NUMERIC(18, 2),             
+    amplitude FLOAT,            
+    pct_chg FLOAT,               
+    change FLOAT,              
+    turnover_rate FLOAT,        
+    PRIMARY KEY (i_code, td)     
 );
 SELECT create_hypertable('dg_ak_index_zh_a_hist_daily', 'td');
 
@@ -22,9 +22,9 @@ SELECT create_hypertable('dg_ak_index_zh_a_hist_daily', 'td');
 
 
 CREATE TABLE dg_ak_index_zh_a_code_name (
-    i_code VARCHAR(20) NOT NULL PRIMARY KEY, -- 股票代码，作为主键
-    i_name VARCHAR(100) NOT NULL,            -- 股票名称
+    i_code VARCHAR(20) NOT NULL PRIMARY KEY, 
+    i_name VARCHAR(100) NOT NULL,           
     symbol VARCHAR(100),
-    create_time TIMESTAMP,                   -- 创建时间
-    update_time TIMESTAMP                    -- 更新时间
+    create_time TIMESTAMP,                   
+    update_time TIMESTAMP                  
 );

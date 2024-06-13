@@ -1,42 +1,41 @@
 
 
 CREATE TABLE da_ak_stock_price_hl (
-    s_code VARCHAR(20) NOT NULL,        -- 股票代码
-    td DATE NOT NULL,                   -- 交易日期
-    interval INT NOT NULL,              -- 时间间隔
-    hs_h FLOAT,                         -- 历史高点
-    hs_l FLOAT,                         -- 历史低点
-    d_hs_h INT,                         -- 距历史高点的天数
-    d_hs_l INT,                         -- 距历史低点的天数
-    chg_from_hs FLOAT,                  -- 从历史高点或历史低点的变化值
-    pct_chg_from_hs FLOAT,              -- 从历史高点或历史低点的百分比变化
-    tg_h FLOAT,                         -- 目标高点
-    tg_l FLOAT,                         -- 目标低点
-    d_tg_h INT,                         -- 距目标高点的天数
-    d_tg_l INT,                         -- 距目标低点的天数
-    chg_to_tg FLOAT,                    -- 到目标高点或目标低点的变化值
-    pct_chg_to_tg FLOAT,                -- 到目标高点或目标低点的百分比变化
-    PRIMARY KEY (s_code, td, interval)  -- 组合主键：股票代码、交易日期和间隔
+    s_code VARCHAR(20) NOT NULL,        -- Stock code
+    td DATE NOT NULL,                   -- Trade date
+    interval INT NOT NULL,              -- Time interval
+    hs_h FLOAT,                         -- Historical high
+    hs_l FLOAT,                         -- Historical low
+    d_hs_h INT,                         -- Days since historical high
+    d_hs_l INT,                         -- Days since historical low
+    chg_from_hs FLOAT,                  -- Change from historical high/low
+    pct_chg_from_hs FLOAT,              -- Percentage change from historical high/low
+    tg_h FLOAT,                         -- Target high
+    tg_l FLOAT,                         -- Target low
+    d_tg_h INT,                         -- Days to target high
+    d_tg_l INT,                         -- Days to target low
+    chg_to_tg FLOAT,                    -- Change to target high/low
+    pct_chg_to_tg FLOAT,                -- Percentage change to target high/low
+    PRIMARY KEY (s_code, td, interval)  -- Composite primary key: stock code, trade date, and interval
 );
 SELECT create_hypertable('da_ak_stock_price_hl', 'td');
 
-
 CREATE TABLE da_ak_stock_price_hl_store (
-    s_code VARCHAR(20) NOT NULL,        -- 股票代码
-    td DATE NOT NULL,                   -- 交易日期
-    interval INT NOT NULL,              -- 时间间隔
-    hs_h FLOAT,                         -- 历史高点
-    hs_l FLOAT,                         -- 历史低点
-    d_hs_h INT,                         -- 距历史高点的天数
-    d_hs_l INT,                         -- 距历史低点的天数
-    chg_from_hs FLOAT,                  -- 从历史高点或历史低点的变化值
-    pct_chg_from_hs FLOAT,              -- 从历史高点或历史低点的百分比变化
-    tg_h FLOAT,                         -- 目标高点
-    tg_l FLOAT,                         -- 目标低点
-    d_tg_h INT,                         -- 距目标高点的天数
-    d_tg_l INT,                         -- 距目标低点的天数
-    chg_to_tg FLOAT,                    -- 到目标高点或目标低点的变化值
-    pct_chg_to_tg FLOAT,                -- 到目标高点或目标低点的百分比变化
-    PRIMARY KEY (s_code, td, interval)  -- 组合主键：股票代码、交易日期和间隔
+    s_code VARCHAR(20) NOT NULL,        -- Stock code
+    td DATE NOT NULL,                   -- Trade date
+    interval INT NOT NULL,              -- Time interval
+    hs_h FLOAT,                         -- Historical high
+    hs_l FLOAT,                         -- Historical low
+    d_hs_h INT,                         -- Days since historical high
+    d_hs_l INT,                         -- Days since historical low
+    chg_from_hs FLOAT,                  -- Change from historical high/low
+    pct_chg_from_hs FLOAT,              -- Percentage change from historical high/low
+    tg_h FLOAT,                         -- Target high
+    tg_l FLOAT,                         -- Target low
+    d_tg_h INT,                         -- Days to target high
+    d_tg_l INT,                         -- Days to target low
+    chg_to_tg FLOAT,                    -- Change to target high/low
+    pct_chg_to_tg FLOAT,                -- Percentage change to target high/low
+    PRIMARY KEY (s_code, td, interval)  -- Composite primary key: stock code, trade date, and interval
 );
 SELECT create_hypertable('da_ak_stock_price_hl_store', 'td');

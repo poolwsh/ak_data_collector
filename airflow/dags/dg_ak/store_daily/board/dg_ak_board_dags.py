@@ -19,13 +19,10 @@ from airflow.operators.python import PythonOperator, BranchPythonOperator
 from airflow.operators.dummy import DummyOperator
 from airflow.utils.dates import days_ago
 
-# 配置日志调试开关
 DEBUG_MODE = con.DEBUG_MODE
 
-# 配置数据库连接
 pg_conn = PGEngine.get_conn()
 
-# 配置路径
 from pathlib import Path
 current_path = Path(__file__).resolve().parent 
 config_path = current_path / 'dg_ak_board_config.py'

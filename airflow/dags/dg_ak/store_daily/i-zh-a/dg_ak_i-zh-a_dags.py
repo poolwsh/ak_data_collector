@@ -33,8 +33,8 @@ INDEX_CODE_NAME_TABLE = 'dg_ak_index_zh_a_code_name'
 DEBUG_MODE = con.DEBUG_MODE
 DEFAULT_END_DATE = dguf.format_td8(datetime.now())
 DEFAULT_START_DATE = con.ZH_A_DEFAULT_START_DATE
-BATCH_SIZE = 5000  # 处理的数据总行数阈值
-ROLLBACK_DAYS = 15  # 回滚天数
+BATCH_SIZE = 5000  
+ROLLBACK_DAYS = 15 
 
 def get_i_code_name_list(redis_conn: redis.Redis, pg_conn, ttl: int = 60 * 60):
     if DEBUG_MODE:
@@ -203,7 +203,6 @@ def process_batch_data(ak_func_name, period, combined_df, conn):
     if temp_csv_path is None:
         raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
 
-    # 将数据从 CSV 导入数据库
     dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}_{period}', task_cache_conn)
 
 
@@ -248,11 +247,9 @@ def process_index_data(ak_func_name: str, period: str):
                 else:
                     failed_indexes.append(arg_list[index])
 
-                # 如果达到批次大小，处理并清空缓存
                 if total_rows >= BATCH_SIZE or (index + 1) == total_codes:
                     _combined_df = pd.concat(all_data, ignore_index=True)
                     process_batch_data(ak_func_name, period, _combined_df, conn)
-                    # 清空缓存
                     all_data = []
                     total_rows = 0
 
@@ -260,7 +257,6 @@ def process_index_data(ak_func_name: str, period: str):
                 logger.error(f"Failed to process data for i_code={i_code}: {e}")
                 failed_indexes.append(arg_list[index])
 
-        # 将出错的指数代码写入 Redis
         if failed_indexes:
             dguf.write_list_to_redis(FAILED_INDEXES_CACHE_PREFIX, failed_indexes, task_cache_conn)
             logger.info(f"Failed indexes: {failed_indexes}")

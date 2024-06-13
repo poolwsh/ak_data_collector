@@ -22,15 +22,12 @@ from dags.dg_ak.utils.dg_ak_config import dgak_config as con
 
 DEBUG_MODE = con.DEBUG_MODE
 
-# 配置数据库连接
 pg_conn = PGEngine.get_conn()
 
-# 配置路径
 config_path = Path(__file__).resolve().parent / 'dg_ak_ff_config.py'
 sys.path.append(config_path.parent.as_posix())
 ak_cols_config_dict = dguf.load_ak_cols_config(config_path.as_posix())
 
-# 统一定义Redis keys
 FF_DATE_LIST_KEY_PREFIX = "ff_date_list"
 STORED_KEYS_KEY_PREFIX = "stored_keys"
 
@@ -38,7 +35,6 @@ TRACING_TABLE_NAME_BY_DATE = 'dg_ak_tracing_by_date'
 TRACING_TABLE_NAME_BY_DATE_PARAM = 'dg_ak_tracing_by_date_1_param'
 TRACING_TABLE_NAME_BY_SCODE_DATE = 'dg_ak_tracing_by_scode_date'
 
-# 配置 today 变量
 td_list = dguf.get_trade_dates(pg_conn)
 if DEBUG_MODE and td_list and len(td_list)>0:
         today = max(td_list).strftime('%Y-%m-%d')

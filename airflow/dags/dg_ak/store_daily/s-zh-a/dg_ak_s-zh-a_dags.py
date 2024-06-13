@@ -32,8 +32,8 @@ STOCK_CODE_NAME_TABLE = 'dg_ak_stock_zh_a_code_name'
 DEBUG_MODE = con.DEBUG_MODE
 DEFAULT_END_DATE = dguf.format_td8(datetime.now())
 DEFAULT_START_DATE = con.ZH_A_DEFAULT_START_DATE
-BATCH_SIZE = 5000  # 处理的数据总行数阈值
-ROLLBACK_DAYS = 15  # 回滚天数
+BATCH_SIZE = 5000  
+ROLLBACK_DAYS = 15 
 
 def insert_code_name_to_db(code_name_list: list[tuple[str, str]]):
     conn = None
@@ -135,10 +135,10 @@ def process_batch_data(ak_func_name, period, adjust, combined_df, all_trade_date
     if temp_csv_path is None:
         raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
 
-    # 将数据从 CSV 导入数据库
+   
     dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}_{period}_{adjust}', task_cache_conn)
 
-    # 更新交易日期
+   
     update_trade_dates(conn, all_trade_dates)
 
     last_td = combined_df['td'].max()
@@ -187,11 +187,10 @@ def process_stock_data(ak_func_name: str, period: str, adjust: str):
                 else:
                     failed_stocks.append(arg_list[index])
 
-                # 如果达到批次大小，处理并清空缓存
+            
                 if total_rows >= BATCH_SIZE or (index + 1) == total_codes:
                     _combined_df = pd.concat(all_data, ignore_index=True)
                     process_batch_data(ak_func_name, period, adjust, _combined_df, all_trade_dates, conn)
-                    # 清空缓存
                     all_data = []
                     total_rows = 0
                     all_trade_dates.clear()
@@ -200,7 +199,6 @@ def process_stock_data(ak_func_name: str, period: str, adjust: str):
                 logger.error(f"Failed to process data for s_code={s_code}: {e}")
                 failed_stocks.append(arg_list[index])
 
-        # 将出错的个股代码写入 Redis
         if failed_stocks:
             dguf.write_list_to_redis(FAILED_STOCKS_CACHE_PREFIX, failed_stocks, task_cache_conn)
             logger.info(f"Failed stocks: {failed_stocks}")
