@@ -280,7 +280,7 @@ def retry_failed_indexes(ak_func_name: str, period: str):
 
         if failed_indexes:
             formatted_failed_indexes = "\n".join([str(index) for index in failed_indexes])
-            raise AirflowException(f"Warning: There are failed indexes that need to be retried:\n{formatted_failed_indexes}")
+            logger.warning(f"Warning: There are failed indexes that need to be retried:\n{formatted_failed_indexes}")
 
     except Exception as e:
         logger.error(f"Failed to retry indexes for {ak_func_name}: {e}")

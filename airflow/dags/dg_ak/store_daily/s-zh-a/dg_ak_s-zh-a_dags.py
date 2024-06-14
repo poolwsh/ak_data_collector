@@ -4,6 +4,7 @@ import os
 import sys
 import socket
 import pandas as pd
+from typing import List
 from pathlib import Path
 from datetime import timedelta, datetime
 from airflow.models.dag import DAG
@@ -14,13 +15,13 @@ import psycopg2.extras
 
 from dags.utils.db import PGEngine, task_cache_conn
 from dags.utils.logger import logger
-from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dguf
+from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dgakuf
 from dags.dg_ak.utils.dg_ak_config import dgak_config as con
 
 current_path = Path(__file__).resolve().parent 
 config_path = current_path / 'dg_ak_s-zh-a_config.py'
 sys.path.append(config_path.parent.as_posix())
-ak_cols_config_dict = dguf.load_ak_cols_config(config_path.as_posix())
+ak_cols_config_dict = dgakuf.load_ak_cols_config(config_path.as_posix())
 
 ARG_LIST_CACHE_PREFIX = "dg_ak_s_zh_a_arg_list"
 FAILED_STOCKS_CACHE_PREFIX = "failed_stocks"
@@ -30,7 +31,7 @@ TRADE_DATE_TABLE_NAME = 'dg_ak_stock_zh_a_trade_date'
 STOCK_CODE_NAME_TABLE = 'dg_ak_stock_zh_a_code_name'
 
 DEBUG_MODE = con.DEBUG_MODE
-DEFAULT_END_DATE = dguf.format_td8(datetime.now())
+DEFAULT_END_DATE = dgakuf.format_td8(datetime.now())
 DEFAULT_START_DATE = con.ZH_A_DEFAULT_START_DATE
 BATCH_SIZE = 5000  
 ROLLBACK_DAYS = 15 
@@ -95,7 +96,7 @@ def prepare_arg_list(ak_func_name: str, period: str, adjust: str):
     conn = None
     try:
         conn = PGEngine.get_conn()
-        tracing_df = dguf.get_tracing_data_df(conn, TRACING_TABLE_NAME)
+        tracing_df = dgakuf.get_tracing_data_df(conn, TRACING_TABLE_NAME)
         current_tracing_df = tracing_df[
             (tracing_df['ak_func_name'] == ak_func_name) &
             (tracing_df['period'] == period) &
@@ -103,7 +104,7 @@ def prepare_arg_list(ak_func_name: str, period: str, adjust: str):
         ]
         tracing_dict = dict(zip(current_tracing_df['scode'].values, current_tracing_df['last_td'].values))
 
-        s_code_name_list = dguf.get_s_code_name_list(task_cache_conn)
+        s_code_name_list = dgakuf.get_s_code_name_list(task_cache_conn)
         insert_code_name_to_db(s_code_name_list)
         
         arg_list = []
@@ -112,10 +113,10 @@ def prepare_arg_list(ak_func_name: str, period: str, adjust: str):
 
             if start_date != DEFAULT_START_DATE:
                 start_date = (datetime.strptime(str(start_date), '%Y-%m-%d') - timedelta(days=ROLLBACK_DAYS)).strftime('%Y-%m-%d')
-            arg_list.append((s_code, dguf.format_td8(start_date), DEFAULT_END_DATE))
+            arg_list.append((s_code, dgakuf.format_td8(start_date), DEFAULT_END_DATE))
 
         redis_key = f"{ARG_LIST_CACHE_PREFIX}@{ak_func_name}@{period}@{adjust}"
-        dguf.write_list_to_redis(redis_key, arg_list, task_cache_conn)
+        dgakuf.write_list_to_redis(redis_key, arg_list, task_cache_conn)
         logger.info(f"Argument list for {ak_func_name} with period={period} and adjust={adjust} has been prepared and cached.")
     finally:
         if conn:
@@ -126,17 +127,17 @@ def process_batch_data(ak_func_name, period, adjust, combined_df, all_trade_date
         logger.debug(f"Combined DataFrame columns for {ak_func_name}: {combined_df.columns}")
 
     combined_df['s_code'] = combined_df['s_code'].astype(str)
-    combined_df = dguf.convert_columns(combined_df, f'dg_ak_{ak_func_name}_{period}_{adjust}', conn, task_cache_conn)
+    combined_df = dgakuf.convert_columns(combined_df, f'dg_ak_{ak_func_name}_{period}_{adjust}', conn, task_cache_conn)
 
     if 'td' in combined_df.columns:
         combined_df['td'] = pd.to_datetime(combined_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
 
-    temp_csv_path = dguf.save_data_to_csv(combined_df, f'{ak_func_name}_{period}_{adjust}')
+    temp_csv_path = dgakuf.save_data_to_csv(combined_df, f'{ak_func_name}_{period}_{adjust}')
     if temp_csv_path is None:
         raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
 
    
-    dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}_{period}_{adjust}', task_cache_conn)
+    dgakuf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}_{period}_{adjust}', task_cache_conn)
 
    
     update_trade_dates(conn, all_trade_dates)
@@ -152,7 +153,7 @@ def process_stock_data(ak_func_name: str, period: str, adjust: str):
         conn = PGEngine.get_conn()
         logger.info(f"Starting to save data for {ak_func_name} with period={period} and adjust={adjust}")
         redis_key = f"{ARG_LIST_CACHE_PREFIX}@{ak_func_name}@{period}@{adjust}"
-        arg_list = dguf.read_list_from_redis(redis_key, task_cache_conn)
+        arg_list = dgakuf.read_list_from_redis(redis_key, task_cache_conn)
 
         if not arg_list:
             raise AirflowException(f"No arguments available for {ak_func_name}, skipping data fetch.")
@@ -170,11 +171,11 @@ def process_stock_data(ak_func_name: str, period: str, adjust: str):
             try:
                 logger.info(f'({index + 1}/{total_codes}) Fetching data for s_code={s_code} from {start_date} to {end_date}')
                 if adjust == 'bfq':
-                    stock_data_df = dguf.get_s_code_data(
+                    stock_data_df = dgakuf.get_s_code_data(
                         ak_func_name, ak_cols_config_dict, s_code, period, start_date, end_date, None
                     )
                 else:
-                    stock_data_df = dguf.get_s_code_data(
+                    stock_data_df = dgakuf.get_s_code_data(
                         ak_func_name, ak_cols_config_dict, s_code, period, start_date, end_date, adjust
                     )
 
@@ -200,7 +201,7 @@ def process_stock_data(ak_func_name: str, period: str, adjust: str):
                 failed_stocks.append(arg_list[index])
 
         if failed_stocks:
-            dguf.write_list_to_redis(FAILED_STOCKS_CACHE_PREFIX, failed_stocks, task_cache_conn)
+            dgakuf.write_list_to_redis(FAILED_STOCKS_CACHE_PREFIX, failed_stocks, task_cache_conn)
             logger.info(f"Failed stocks: {failed_stocks}")
 
     except Exception as e:
@@ -213,7 +214,7 @@ def process_stock_data(ak_func_name: str, period: str, adjust: str):
 def retry_failed_stocks(ak_func_name: str, period: str, adjust: str):
     try:
         logger.info(f"Retrying failed stocks for {ak_func_name} with period={period} and adjust={adjust}")
-        failed_stocks = dguf.read_list_from_redis(FAILED_STOCKS_CACHE_PREFIX, task_cache_conn)
+        failed_stocks = dgakuf.read_list_from_redis(FAILED_STOCKS_CACHE_PREFIX, task_cache_conn)
         if not failed_stocks:
             logger.info("No failed stocks to retry.")
             return
@@ -222,7 +223,7 @@ def retry_failed_stocks(ak_func_name: str, period: str, adjust: str):
 
         if failed_stocks:
             formatted_failed_stocks = "\n".join([str(index) for index in failed_stocks])
-            raise AirflowException(f"Warning: There are failed indexes that need to be retried:\n{formatted_failed_stocks}")
+            logger.warning(f"Warning: There are failed indexes that need to be retried:\n{formatted_failed_stocks}")
 
     except Exception as e:
         logger.error(f"Failed to retry stocks for {ak_func_name}: {e}")
@@ -262,7 +263,7 @@ def generate_dag(stock_func, period, adjust):
         default_args=default_args,
         description=f'利用akshare的函数{stock_func}(period={period}, adjust={adjust})下载个股行情相关数据',
         start_date=days_ago(1),
-        schedule=dguf.generate_random_minute_schedule(hour=8), # 北京时间: 8+8=16
+        schedule=dgakuf.generate_random_minute_schedule(hour=8), # 北京时间: 8+8=16
         catchup=False,
         tags=['akshare', 'store_daily', '个股行情'],
         max_active_runs=1,
