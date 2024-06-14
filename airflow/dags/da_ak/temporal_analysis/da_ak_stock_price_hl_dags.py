@@ -22,8 +22,6 @@ from dags.da_ak.utils.da_ak_config import daak_config as con
 
 DEBUG_MODE = con.DEBUG_MODE
 
-pg_conn = PGEngine.get_conn()
-
 PRICE_HL_TABLE_NAME = 'da_ak_stock_price_hl_store'
 TEMP_PRICE_HL_TABLE_NAME = 'da_ak_stock_price_hl'
 TRACING_TABLE_NAME = 'da_ak_tracing_stock_price_hl'
@@ -39,8 +37,8 @@ def get_stock_data(s_code: str) -> pd.DataFrame:
         WHERE s_code = '{s_code}';
     """
     try:
-        raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
-        with raw_conn.cursor() as cursor:
+        conn = PGEngine.get_conn()
+        with conn.cursor() as cursor:
             cursor.execute(sql)
             columns = [desc[0] for desc in cursor.description]
             data = cursor.fetchall()
@@ -50,6 +48,9 @@ def get_stock_data(s_code: str) -> pd.DataFrame:
     except Exception as e:
         logger.error(f"Failed to fetch data for s_code={s_code}: {str(e)}")
         raise AirflowException(e)
+    finally:
+        if conn:
+            PGEngine.release_conn(conn)
 
 
 def clear_table(conn, table_name):
@@ -70,10 +71,10 @@ def insert_or_update_data_from_csv(csv_path):
         logger.error("CSV file does not exist.")
         return
     try:
-        raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
-        _cursor = raw_conn.cursor()
+        conn = PGEngine.get_conn()
+        _cursor = conn.cursor()
  
-        clear_table(raw_conn, TEMP_PRICE_HL_TABLE_NAME)
+        clear_table(conn, TEMP_PRICE_HL_TABLE_NAME)
 
         with open(csv_path, 'r') as _file:
             _copy_sql = f"COPY {TEMP_PRICE_HL_TABLE_NAME} FROM STDIN WITH CSV HEADER DELIMITER ','"
@@ -97,23 +98,26 @@ def insert_or_update_data_from_csv(csv_path):
                 pct_chg_to_tg = EXCLUDED.pct_chg_to_tg
         """)
         
-        raw_conn.commit()
+        conn.commit()
         logger.info(f"Data from {csv_path} successfully loaded and updated into {PRICE_HL_TABLE_NAME}.")
         
         _cursor.close()
     except Exception as _e:
-        raw_conn.rollback()
+        conn.rollback()
         logger.error(f"Failed to load data from CSV: {_e}")
         raise AirflowException(_e)
+    finally:
+        if conn:
+            PGEngine.release_conn(conn)
 
 
 
 def insert_or_update_tracing_data(s_code: str, min_td: str, max_td: str):
     try:
-        raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
+        conn = PGEngine.get_conn()
         host_name = os.uname().nodename
         logger.info(f'storing tracing data of s_code={s_code}, min_td={min_td}, max_td={max_td}')
-        with raw_conn.cursor() as cursor:
+        with conn.cursor() as cursor:
             sql = f"""
                 INSERT INTO {TRACING_TABLE_NAME} (s_code, min_td, max_td, host_name)
                 VALUES ('{s_code}', '{min_td}', '{max_td}', '{host_name}')
@@ -124,19 +128,22 @@ def insert_or_update_tracing_data(s_code: str, min_td: str, max_td: str):
                 update_time = CURRENT_TIMESTAMP;
             """
             cursor.execute(sql)
-            raw_conn.commit()
+            conn.commit()
         logger.info(f"Tracing data inserted/updated for s_code={s_code}.")
     except Exception as e:
         logger.error(f"Failed to insert/update tracing data for s_code={s_code}: {str(e)}")
         raise AirflowException(e)
+    finally:
+        if conn:
+            PGEngine.release_conn(conn)
 
 def get_tracing_data(s_code: str) -> tuple:
     try:
         sql = f"""
             SELECT min_td, max_td FROM {TRACING_TABLE_NAME} WHERE s_code = '{s_code}';
         """
-        raw_conn = PGEngine.get_psycopg2_conn(pg_conn)
-        with raw_conn.cursor() as cursor:
+        conn = PGEngine.get_conn()
+        with conn.cursor() as cursor:
             cursor.execute(sql)
             result = cursor.fetchone()
             if result:
@@ -146,6 +153,9 @@ def get_tracing_data(s_code: str) -> tuple:
     except Exception as e:
         logger.error(f"Failed to fetch tracing data for s_code={s_code}: {str(e)}")
         raise AirflowException(e)
+    finally:
+        if conn:
+            PGEngine.release_conn(conn)
 
 def generate_fibonacci_intervals(n: int) -> list[int]:
     fibs = [1, 2]
