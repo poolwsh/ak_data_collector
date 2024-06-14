@@ -305,7 +305,6 @@ class AkUtilTools(UtilTools):
     @staticmethod
     def write_list_to_redis(key: str, data_list: list, conn: redis.Redis, ttl: int = con.DEFAULT_REDIS_TTL):
         try:
-            # 转换日期对象为字符串
             _data_list = [str(item) if isinstance(item, (datetime, date)) else item for item in data_list]
             _data_json = json.dumps(_data_list)
             conn.setex(key, ttl, _data_json)

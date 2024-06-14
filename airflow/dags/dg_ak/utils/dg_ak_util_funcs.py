@@ -93,8 +93,6 @@ class DgAkUtilFuncs(AkUtilTools):
             logger.debug(f'Processed i_code data for {i_code}, length: {len(_i_df)}, first 5 rows: {_i_df.head().to_dict(orient="records")}')
         return _i_df
     
-    # region stock funcs
-
     @staticmethod
     def get_s_code_data(ak_func_name, ak_cols_config_dict, s_code, period, start_date, end_date, adjust, pause_time: float = default_pause_time):
         if DEBUG_MODE:
@@ -134,13 +132,6 @@ class DgAkUtilFuncs(AkUtilTools):
             logger.debug(f'Processed s_code data for {s_code}, length: {len(_s_df)}, first 5 rows: {_s_df.head().to_dict(orient="records")}')
         return _s_df
 
-
-
-
-
-    # endregion stock funcs
-
-    # region tool funcs
     @staticmethod
     def get_trade_dates(pg_conn) -> list:
         with pg_conn.cursor() as cursor:
@@ -350,9 +341,7 @@ class DgAkUtilFuncs(AkUtilTools):
             return _combined_df
         else:
             return pd.DataFrame()  # Return an empty DataFrame if no data was fetched
-    # endregion tool funcs
 
-    # region store once
     @staticmethod
     def load_ak_cols_config(config_file_path: str) -> dict:
         _config = {}
@@ -363,34 +352,34 @@ class DgAkUtilFuncs(AkUtilTools):
         return _config['ak_cols_config']
 
 
-    @staticmethod
-    def store_ak_data(pg_conn, ak_func_name, insert_sql, truncate=False):
-        _cursor = pg_conn.cursor()
-        if DEBUG_MODE:
-            logger.debug(f"Storing data for {ak_func_name} with SQL: {insert_sql}")
-        try:
-            _cursor.execute(insert_sql)
-            _inserted_rows = _cursor.fetchall()
+    # @staticmethod
+    # def store_ak_data(pg_conn, ak_func_name, insert_sql, truncate=False):
+    #     _cursor = pg_conn.cursor()
+    #     if DEBUG_MODE:
+    #         logger.debug(f"Storing data for {ak_func_name} with SQL: {insert_sql}")
+    #     try:
+    #         _cursor.execute(insert_sql)
+    #         _inserted_rows = _cursor.fetchall()
 
-            pg_conn.commit()
-            logger.info(f"Data successfully inserted into table for {ak_func_name}")
+    #         pg_conn.commit()
+    #         logger.info(f"Data successfully inserted into table for {ak_func_name}")
 
-            if truncate:
-                _truncate_sql = f"TRUNCATE TABLE dg_ak_{ak_func_name};"
-                _cursor.execute(_truncate_sql)
-                pg_conn.commit()
-                logger.info(f"Table dg_ak_{ak_func_name} has been truncated")
+    #         if truncate:
+    #             _truncate_sql = f"TRUNCATE TABLE dg_ak_{ak_func_name};"
+    #             _cursor.execute(_truncate_sql)
+    #             pg_conn.commit()
+    #             logger.info(f"Table dg_ak_{ak_func_name} has been truncated")
 
-            if DEBUG_MODE:
-                logger.debug(f"Inserted rows length: {len(_inserted_rows)}, first 5 rows: {_inserted_rows[:5]}")
-            return _inserted_rows  # Return the list of inserted rows
+    #         if DEBUG_MODE:
+    #             logger.debug(f"Inserted rows length: {len(_inserted_rows)}, first 5 rows: {_inserted_rows[:5]}")
+    #         return _inserted_rows  # Return the list of inserted rows
 
-        except Exception as _e:
-            pg_conn.rollback()
-            logger.error(f"Failed to store data for {ak_func_name}: {_e}")
-            raise
-        finally:
-            _cursor.close()
+    #     except Exception as _e:
+    #         pg_conn.rollback()
+    #         logger.error(f"Failed to store data for {ak_func_name}: {_e}")
+    #         raise
+    #     finally:
+    #         _cursor.close()
 
     # endregion store once
 
@@ -418,31 +407,31 @@ class DgAkUtilFuncs(AkUtilTools):
             _cursor.close()
 
 
-    @staticmethod
-    def get_tracing_by_date(pg_conn, key):
-        _sql = """
-        SELECT ak_func_name, td, create_time, update_time, category, is_active, host_name
-        FROM dg_ak_tracing_by_date
-        WHERE ak_func_name = %s;
-        """
-        if DEBUG_MODE:
-            logger.debug(f"Executing query to get tracing data by date: {_sql}")
+    # @staticmethod
+    # def get_tracing_by_date(pg_conn, key):
+    #     _sql = """
+    #     SELECT ak_func_name, td, create_time, update_time, category, is_active, host_name
+    #     FROM dg_ak_tracing_by_date
+    #     WHERE ak_func_name = %s;
+    #     """
+    #     if DEBUG_MODE:
+    #         logger.debug(f"Executing query to get tracing data by date: {_sql}")
 
-        _cursor = pg_conn.cursor()
-        try:
-            _cursor.execute(_sql, (key,))
-            _rows = _cursor.fetchall()
-            _df = pd.DataFrame(
-                _rows,
-                columns=[
-                    'ak_func_name', 'td', 'create_time', 'update_time',
-                    'category', 'is_active', 'host_name'
-                ])
-            if DEBUG_MODE:
-                logger.debug(f"Tracing data by date length: {len(_df)}, first 5 rows: {_df.head().to_dict(orient='records')}")
-            return _df
-        finally:
-            _cursor.close()
+    #     _cursor = pg_conn.cursor()
+    #     try:
+    #         _cursor.execute(_sql, (key,))
+    #         _rows = _cursor.fetchall()
+    #         _df = pd.DataFrame(
+    #             _rows,
+    #             columns=[
+    #                 'ak_func_name', 'td', 'create_time', 'update_time',
+    #                 'category', 'is_active', 'host_name'
+    #             ])
+    #         if DEBUG_MODE:
+    #             logger.debug(f"Tracing data by date length: {len(_df)}, first 5 rows: {_df.head().to_dict(orient='records')}")
+    #         return _df
+    #     finally:
+    #         _cursor.close()
 
     @staticmethod
     def prepare_tracing_data(ak_func_name, param_name, date_values):
@@ -505,25 +494,23 @@ class DgAkUtilFuncs(AkUtilTools):
             logger.debug(f"Prepared insert SQL for tracing date with 1 param data: {_insert_sql}")
         DgAkUtilFuncs.execute_tracing_data_insert(conn, _insert_sql, _data)
 
-    @staticmethod
-    def insert_tracing_scode_date_data(conn, ak_func_name, scode_list, date):
-        _data = [(ak_func_name, _scode, date, datetime.now(), datetime.now(), os.getenv('HOSTNAME', socket.gethostname())) for _scode in scode_list]
-        _insert_sql = """
-            INSERT INTO dg_ak_tracing_by_scode_date (ak_func_name, scode, last_td, create_time, update_time, host_name)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (ak_func_name, scode) DO UPDATE 
-            SET last_td = EXCLUDED.last_td,
-                update_time = EXCLUDED.update_time,
-                host_name = EXCLUDED.host_name;
-            """
-        if DEBUG_MODE:
-            logger.debug(f"Prepared insert SQL for tracing s_code date data: {_insert_sql}")
-        DgAkUtilFuncs.execute_tracing_data_insert(conn, _insert_sql, _data)
+    # @staticmethod
+    # def insert_tracing_scode_date_data(conn, ak_func_name, scode_list, date):
+    #     _data = [(ak_func_name, _scode, date, datetime.now(), datetime.now(), os.getenv('HOSTNAME', socket.gethostname())) for _scode in scode_list]
+    #     _insert_sql = """
+    #         INSERT INTO dg_ak_tracing_by_scode_date (ak_func_name, scode, last_td, create_time, update_time, host_name)
+    #         VALUES (%s, %s, %s, %s, %s, %s)
+    #         ON CONFLICT (ak_func_name, scode) DO UPDATE 
+    #         SET last_td = EXCLUDED.last_td,
+    #             update_time = EXCLUDED.update_time,
+    #             host_name = EXCLUDED.host_name;
+    #         """
+    #     if DEBUG_MODE:
+    #         logger.debug(f"Prepared insert SQL for tracing s_code date data: {_insert_sql}")
+    #     DgAkUtilFuncs.execute_tracing_data_insert(conn, _insert_sql, _data)
     # endregion tracing data funcs
 
-			 
-															   
-
+	
     @staticmethod
     def is_trading_day(pg_conn, date=datetime.now().date()) -> str:
         trade_dates = DgAkUtilFuncs.get_trade_dates(pg_conn)
@@ -538,12 +525,4 @@ class DgAkUtilFuncs(AkUtilTools):
             cursor.execute(query, (date,))
             results = cursor.fetchall()
         return [row[0] for row in results]
-
-
-
-
-
-
-
-
 
