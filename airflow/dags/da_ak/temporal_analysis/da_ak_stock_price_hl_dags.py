@@ -22,7 +22,7 @@ from dags.da_ak.utils.da_ak_config import daak_config as con
 
 DEBUG_MODE = con.DEBUG_MODE
 
-PRICE_HL_TABLE_NAME = 'da_ak_stock_price_hl_store'
+PRICE_HL_TABLE_NAME = 'da_ak_stock_price_hl'
 TEMP_PRICE_HL_TABLE_NAME = 'da_ak_stock_price_hl'
 TRACING_TABLE_NAME = 'da_ak_tracing_stock_price_hl'
 MIN_INTERVAL = 3
@@ -33,7 +33,7 @@ os.makedirs(CSV_ROOT, exist_ok=True)
 
 def get_stock_data(s_code: str) -> pd.DataFrame:
     sql = f"""
-        SELECT * FROM ak_dg_stock_zh_a_hist_store_daily_hfq 
+        SELECT * FROM ak_dg_stock_zh_a_hist_daily_hfq 
         WHERE s_code = '{s_code}';
     """
     try:
