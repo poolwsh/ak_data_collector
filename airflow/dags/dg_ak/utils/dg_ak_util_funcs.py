@@ -282,8 +282,10 @@ class DgAkUtilFuncs(AkUtilTools):
         if DEBUG_MODE:
             logger.debug(f"Fetching data for date list length: {len(td_list)}\nfirst 5 dates: {td_list[:5]}")
 
-        for _td in td_list:
+        _total_list = len(td_list)
+        for _index, _td in enumerate(td_list):
             try:
+                logger.info(f'({_index + 1}/{_total_list}) Fetching data for td={_td}')
                 _df = DgAkUtilFuncs.get_data_by_td(ak_func_name, ak_cols_config_dict, _td, td_pa_name)
                 if _df.empty:
                     _retry_count += 1
