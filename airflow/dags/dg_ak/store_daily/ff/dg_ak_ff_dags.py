@@ -168,9 +168,11 @@ def get_stock_individual_fund_flow():
 def get_stock_individual_fund_flow_rank():
     ak_func_name = "stock_individual_fund_flow_rank"
     df = dguf.try_to_call(lambda: ak.stock_individual_fund_flow_rank(indicator="今日"))
-    df = dguf.remove_cols(df, ak_cols_config_dict[func_name])
-    df.rename(columns=dguf.get_col_dict(ak_cols_config_dict[func_name]), inplace=True)
+    df = dguf.remove_cols(df, ak_cols_config_dict[ak_func_name])
+    df.rename(columns=dguf.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
     df['td'] = today
+    desired_columns = [col[0] for col in dguf.get_columns_from_table(pg_conn, f'dg_ak_{ak_func_name}', task_cache_conn)]
+    df = df[desired_columns]
     temp_csv_path = dguf.save_data_to_csv(df, f'{ak_func_name}')
     if temp_csv_path is None:
         raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
@@ -180,17 +182,19 @@ def get_stock_individual_fund_flow_rank():
         dguf.insert_tracing_date_data(conn, ak_func_name, today)
 
 def get_stock_market_fund_flow():
-    fetch_and_process_data("stock_market_fund_flow", lambda: dguf.get_data_today("stock_market_fund_flow", ak_cols_config_dict), 'dg_ak_stock_market_fund_flow')
+    # ak_func_name = "stock_market_fund_flow"
+    # fetch_and_process_data("stock_market_fund_flow", lambda: dguf.get_data_today("stock_market_fund_flow", ak_cols_config_dict), 'dg_ak_stock_market_fund_flow')
     ak_func_name = "stock_market_fund_flow"
-    df = dguf.get_data_by_none(ak_func_name, ak_cols_config_dict[func_name])
-
+    df = dguf.get_data_by_none(ak_func_name, ak_cols_config_dict)
+    desired_columns = [col[0] for col in dguf.get_columns_from_table(pg_conn, f'dg_ak_{ak_func_name}', task_cache_conn)]
+    df = df[desired_columns]
     temp_csv_path = dguf.save_data_to_csv(df, f'{ak_func_name}')
     if temp_csv_path is None:
         raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
 
     with PGEngine.get_conn() as conn:
         dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}', task_cache_conn)
-        dguf.insert_tracing_date_data(conn, ak_func_name, df['td'].max)
+        dguf.insert_tracing_date_data(conn, ak_func_name, df['td'].max())
 
 def get_stock_sector_fund_flow_rank():
     ak_func_name = 'stock_sector_fund_flow_rank'
@@ -216,11 +220,18 @@ def get_stock_sector_fund_flow_rank():
 
 def get_stock_main_fund_flow():
     ak_func_name = 'stock_main_fund_flow'
-    data = dguf.try_to_call(lambda: ak.stock_sector_fund_flow_rank(symbol="全部股票"))
+    data = dguf.try_to_call(lambda: ak.stock_main_fund_flow(symbol="全部股票"))
 
     data = dguf.remove_cols(data, ak_cols_config_dict[ak_func_name])
     data.rename(columns=dguf.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
     data['td'] = today
+    desired_columns = [col[0] for col in dguf.get_columns_from_table(pg_conn, f'dg_ak_{ak_func_name}', task_cache_conn)]
+    data = data[desired_columns]
+    int_columns = ['today_rank', 'rank_5day', 'rank_10day']  
+    for col in int_columns:
+        if col in data.columns:
+            logger.debug(f'convert {col} type to int')
+            data[col] = data[col].astype('Int64')
     temp_csv_path = dguf.save_data_to_csv(data, f'{ak_func_name}')
     if temp_csv_path is None:
         raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")

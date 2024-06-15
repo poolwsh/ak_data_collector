@@ -1,6 +1,6 @@
 
 
-CREATE TABLE dg_ak_stock_individual_fund_flow_store (
+CREATE TABLE dg_ak_stock_individual_fund_flow (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
     c DECIMAL,
@@ -20,7 +20,7 @@ CREATE TABLE dg_ak_stock_individual_fund_flow_store (
 
 
 
-CREATE TABLE dg_ak_stock_individual_fund_flow_rank_store (
+CREATE TABLE dg_ak_stock_individual_fund_flow_rank (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
     s_name VARCHAR(255),
@@ -41,7 +41,7 @@ CREATE TABLE dg_ak_stock_individual_fund_flow_rank_store (
 
 
 
-CREATE TABLE dg_ak_stock_market_fund_flow_store (
+CREATE TABLE dg_ak_stock_market_fund_flow (
     td DATE NOT NULL,
     shanghai_closing_price DECIMAL,
     shanghai_pct_chg DECIMAL,
@@ -62,7 +62,7 @@ CREATE TABLE dg_ak_stock_market_fund_flow_store (
 
 
 
-CREATE TABLE dg_ak_stock_sector_fund_flow_rank_store (
+CREATE TABLE dg_ak_stock_sector_fund_flow_rank (
     td DATE NOT NULL,
     b_name VARCHAR(255) NOT NULL,
     sector_type VARCHAR(255),
@@ -83,7 +83,7 @@ CREATE TABLE dg_ak_stock_sector_fund_flow_rank_store (
 
 
 
-CREATE TABLE dg_ak_stock_main_fund_flow_store (
+CREATE TABLE dg_ak_stock_main_fund_flow (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
     s_name VARCHAR(255),
@@ -103,7 +103,7 @@ CREATE TABLE dg_ak_stock_main_fund_flow_store (
 
 
 
-CREATE TABLE dg_ak_stock_sector_fund_flow_summary_store (
+CREATE TABLE dg_ak_stock_sector_fund_flow_summary (
     td DATE NOT NULL,
     s_code VARCHAR(50) NOT NULL,
     s_name VARCHAR(255),
@@ -125,7 +125,7 @@ CREATE TABLE dg_ak_stock_sector_fund_flow_summary_store (
 
 
 
-CREATE TABLE dg_ak_stock_sector_fund_flow_hist_store (
+CREATE TABLE dg_ak_stock_sector_fund_flow_hist (
     td DATE NOT NULL,
     b_name VARCHAR(255) NOT NULL,
     main_net_inflow DECIMAL,
@@ -143,7 +143,7 @@ CREATE TABLE dg_ak_stock_sector_fund_flow_hist_store (
 
 
 
-CREATE TABLE dg_ak_stock_concept_fund_flow_hist_store (
+CREATE TABLE dg_ak_stock_concept_fund_flow_hist (
     td DATE NOT NULL,
     b_name VARCHAR(255) NOT NULL,
     main_net_inflow DECIMAL,

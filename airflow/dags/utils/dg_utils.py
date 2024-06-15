@@ -2,6 +2,7 @@ import os
 import json
 import redis
 import traceback
+import numpy as np
 import pandas as pd
 import akshare as ak
 from io import BytesIO
@@ -100,6 +101,9 @@ class AkUtilTools(UtilTools):
             return None
         try:
             os.makedirs(dir_path, exist_ok=True)  # Ensure the directory exists
+            # Replace '-' with np.nan in all columns
+            df.replace('-', np.nan, inplace=True)
+            logger.debug(f'Replaced "-" with np.nan in the DataFrame')
             _file_path = os.path.join(dir_path, f"{filename}.csv")
             df.to_csv(_file_path, index=False, header=include_header)
             logger.info(f"Data saved to CSV at {_file_path}")
@@ -157,6 +161,11 @@ class AkUtilTools(UtilTools):
                 _cursor.execute(sql.SQL("TRUNCATE TABLE {}").format(sql.Identifier(temp_table_name)))
 
                 with open(csv_path, 'r') as _file:
+                    for line in _file:
+                        if '-,' in line:
+                            print(line, end='')
+                    _file.seek(0)  
+
                     _copy_sql = sql.SQL("COPY {} FROM STDIN WITH CSV HEADER DELIMITER ','").format(sql.Identifier(temp_table_name))
                     _cursor.copy_expert(sql=_copy_sql, file=_file)
 
