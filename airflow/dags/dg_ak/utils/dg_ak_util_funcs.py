@@ -240,7 +240,7 @@ class DgAkUtilFuncs(AkUtilTools):
             else:
                 _warning_msg = f'No data found for {ak_func_name} on {td}.'
                 logger.warning(_warning_msg)
-            return pd.DataFrame()  # 返回空的 DataFrame，以避免进一步的处理出错
+            return pd.DataFrame() 
 
         _df = DgAkUtilFuncs.remove_cols(_df, ak_cols_config_dict[ak_func_name])
         _df.rename(columns=DgAkUtilFuncs.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
@@ -311,7 +311,7 @@ class DgAkUtilFuncs(AkUtilTools):
         return _combined_df
 
     @staticmethod
-    def get_data_by_board_names(ak_func_name: str, ak_cols_config_dict: dict, board_names: list[str], date_format: str = '%Y-%m-%d') -> pd.DataFrame:
+    def get_data_by_board_names(ak_func_name: str, ak_cols_config_dict: dict, board_names: list[str]) -> pd.DataFrame:
         all_data = []
         _len_board_names = len(board_names)
         for _index, _b_name in enumerate(board_names):
@@ -327,7 +327,7 @@ class DgAkUtilFuncs(AkUtilTools):
                     _data['b_name'] = _b_name  # Add the board name as a column to the DataFrame
                     all_data.append(_data)
                     if DEBUG_MODE:
-                        logger.debug(f"Retrieved data for board {_b_name}, length: {len(_data)}, rows: {_data.head().to_dict(orient='records')}")
+                        logger.debug(f"Retrieved data for board {_b_name}, length: {len(_data)}, rows: {_data.head()}")
                 else:
                     logger.warning(f"No data found for board {_b_name}")
             except Exception as _e:
@@ -337,9 +337,6 @@ class DgAkUtilFuncs(AkUtilTools):
             _combined_df = pd.concat(all_data, ignore_index=True)
             _combined_df = DgAkUtilFuncs.remove_cols(_combined_df, ak_cols_config_dict[ak_func_name])
             _combined_df.rename(columns=DgAkUtilFuncs.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
-            _combined_df['s_code'] = _combined_df['s_code'].astype(str) 
-            _today_date = datetime.now().strftime(date_format)
-            _combined_df['td'] = _today_date
             if DEBUG_MODE:
                 logger.debug(f"Combined data for all boards length: {len(_combined_df)}, \nfirst 5 rows: \n{_combined_df.head()}")
             return _combined_df
@@ -355,37 +352,6 @@ class DgAkUtilFuncs(AkUtilTools):
             exec(_file.read(), {}, _config)
         return _config['ak_cols_config']
 
-
-    # @staticmethod
-    # def store_ak_data(pg_conn, ak_func_name, insert_sql, truncate=False):
-    #     _cursor = pg_conn.cursor()
-    #     if DEBUG_MODE:
-    #         logger.debug(f"Storing data for {ak_func_name} with SQL: {insert_sql}")
-    #     try:
-    #         _cursor.execute(insert_sql)
-    #         _inserted_rows = _cursor.fetchall()
-
-    #         pg_conn.commit()
-    #         logger.info(f"Data successfully inserted into table for {ak_func_name}")
-
-    #         if truncate:
-    #             _truncate_sql = f"TRUNCATE TABLE dg_ak_{ak_func_name};"
-    #             _cursor.execute(_truncate_sql)
-    #             pg_conn.commit()
-    #             logger.info(f"Table dg_ak_{ak_func_name} has been truncated")
-
-    #         if DEBUG_MODE:
-    #             logger.debug(f"Inserted rows length: {len(_inserted_rows)}, first 5 rows: {_inserted_rows[:5]}")
-    #         return _inserted_rows  # Return the list of inserted rows
-
-    #     except Exception as _e:
-    #         pg_conn.rollback()
-    #         logger.error(f"Failed to store data for {ak_func_name}: {_e}")
-    #         raise
-    #     finally:
-    #         _cursor.close()
-
-    # endregion store once
 
     # region tracing data funcs
     @staticmethod
@@ -409,33 +375,6 @@ class DgAkUtilFuncs(AkUtilTools):
             raise _e
         finally:
             _cursor.close()
-
-
-    # @staticmethod
-    # def get_tracing_by_date(pg_conn, key):
-    #     _sql = """
-    #     SELECT ak_func_name, td, create_time, update_time, category, is_active, host_name
-    #     FROM dg_ak_tracing_by_date
-    #     WHERE ak_func_name = %s;
-    #     """
-    #     if DEBUG_MODE:
-    #         logger.debug(f"Executing query to get tracing data by date: {_sql}")
-
-    #     _cursor = pg_conn.cursor()
-    #     try:
-    #         _cursor.execute(_sql, (key,))
-    #         _rows = _cursor.fetchall()
-    #         _df = pd.DataFrame(
-    #             _rows,
-    #             columns=[
-    #                 'ak_func_name', 'td', 'create_time', 'update_time',
-    #                 'category', 'is_active', 'host_name'
-    #             ])
-    #         if DEBUG_MODE:
-    #             logger.debug(f"Tracing data by date length: {len(_df)}, first 5 rows: {_df.head().to_dict(orient='records')}")
-    #         return _df
-    #     finally:
-    #         _cursor.close()
 
     @staticmethod
     def prepare_tracing_data(ak_func_name, param_name, date_values):
@@ -498,23 +437,6 @@ class DgAkUtilFuncs(AkUtilTools):
             logger.debug(f"Prepared insert SQL for tracing date with 1 param data: {_insert_sql}")
         DgAkUtilFuncs.execute_tracing_data_insert(conn, _insert_sql, _data)
 
-    # @staticmethod
-    # def insert_tracing_scode_date_data(conn, ak_func_name, scode_list, date):
-    #     _data = [(ak_func_name, _scode, date, datetime.now(), datetime.now(), os.getenv('HOSTNAME', socket.gethostname())) for _scode in scode_list]
-    #     _insert_sql = """
-    #         INSERT INTO dg_ak_tracing_by_scode_date (ak_func_name, scode, last_td, create_time, update_time, host_name)
-    #         VALUES (%s, %s, %s, %s, %s, %s)
-    #         ON CONFLICT (ak_func_name, scode) DO UPDATE 
-    #         SET last_td = EXCLUDED.last_td,
-    #             update_time = EXCLUDED.update_time,
-    #             host_name = EXCLUDED.host_name;
-    #         """
-    #     if DEBUG_MODE:
-    #         logger.debug(f"Prepared insert SQL for tracing s_code date data: {_insert_sql}")
-    #     DgAkUtilFuncs.execute_tracing_data_insert(conn, _insert_sql, _data)
-    # endregion tracing data funcs
-
-	
     @staticmethod
     def is_trading_day(pg_conn, date=datetime.now().date()) -> str:
         trade_dates = DgAkUtilFuncs.get_trade_dates(pg_conn)
@@ -523,8 +445,8 @@ class DgAkUtilFuncs(AkUtilTools):
         return False
 
     @staticmethod
-    def get_b_names_from_date(pg_conn, table_name: str, target_date: str) -> List[str]:
-        # Define the query to get distinct b_name values for the given date
+    def get_b_names_by_date(pg_conn, table_name: str, target_date: str) -> List[str]:
+        # Define the query to get distinct b_name values for the given target date
         query = f"SELECT DISTINCT b_name FROM {table_name} WHERE td = %s"
         
         with pg_conn.cursor() as cursor:
@@ -556,8 +478,10 @@ class DgAkUtilFuncs(AkUtilTools):
                     results = cursor.fetchall()
                 actual_date = closest_date
             else:
+                # If no previous date is found, set actual_date to None
                 actual_date = None
         else:
+            # If results are found for the target date, set actual_date to target_date
             actual_date = target_date
 
         # Log debug information if DEBUG_MODE is enabled
@@ -565,6 +489,6 @@ class DgAkUtilFuncs(AkUtilTools):
             logger.debug(f"Query results for table '{table_name}' on date '{target_date}': {results}")
             logger.debug(f"Actual date for the retrieved data: {actual_date}")
         
-        # Return the list of distinct b_name values
+        # Return the list of distinct b_name values and the actual date used for the query
         return [row[0] for row in results], actual_date  # Include the actual date in the return value
 
