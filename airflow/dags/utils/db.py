@@ -1,6 +1,7 @@
 
 import redis
 from psycopg2 import pool
+from contextlib import contextmanager
 from dags.utils.config import config as con
 from dags.utils.logger import logger
 
@@ -9,7 +10,7 @@ class RedisEngine(object):
         host=con.redis_hostname,
         port=con.redis_port,
         password=con.redis_password,
-        max_connections=20
+        max_connections=30
     )
     connections = {}
 
@@ -29,7 +30,7 @@ task_cache_conn = RedisEngine.get_connection(3)
 class PGEngine(object):
     pg_pool = pool.SimpleConnectionPool(
         1,  # minconn
-        20, # maxconn
+        30, # maxconn
         user=con.dag_s_data_user,
         password=con.dag_s_data_password,
         host=con.dag_s_data_hostname,
@@ -60,3 +61,13 @@ class PGEngine(object):
         except Exception as e:
             logger.error(f"Error returning connection to the pool: {e}")
 
+    @staticmethod
+    @contextmanager
+    def managed_conn():
+        conn = None
+        try:
+            conn = PGEngine.get_conn()
+            yield conn
+        finally:
+            if conn:
+                PGEngine.release_conn(conn)
