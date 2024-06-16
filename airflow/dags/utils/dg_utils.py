@@ -156,18 +156,25 @@ class AkUtilTools(UtilTools):
 
                 if not temp_table_exists:
                     columns_def = ", ".join([f"{col[0]} {col[1]}" for col in columns])
+                    logger.debug(f"Creating temp table with columns: {columns_def}")
                     _cursor.execute(sql.SQL("CREATE TABLE {} ({})").format(sql.Identifier(temp_table_name), sql.SQL(columns_def)))
 
+                logger.debug(f"Truncating temp table {temp_table_name}")
                 _cursor.execute(sql.SQL("TRUNCATE TABLE {}").format(sql.Identifier(temp_table_name)))
 
                 with open(csv_path, 'r') as _file:
                     for line in _file:
                         if '-,' in line:
-                            print(line, end='')
+                            logger.debug(f"Line with '-,' found: {line.strip()}")
                     _file.seek(0)  
 
                     _copy_sql = sql.SQL("COPY {} FROM STDIN WITH CSV HEADER DELIMITER ','").format(sql.Identifier(temp_table_name))
+                    logger.debug(f"Copying data from CSV to temp table {temp_table_name} using SQL: {_copy_sql}")
                     _cursor.copy_expert(sql=_copy_sql, file=_file)
+
+                _cursor.execute(sql.SQL("SELECT * FROM {} LIMIT 10").format(sql.Identifier(temp_table_name)))
+                temp_table_sample = _cursor.fetchall()
+                logger.debug(f"Sample data from temp table {temp_table_name}: {temp_table_sample}")
 
                 conflict_target = sql.SQL(", ").join(map(sql.Identifier, primary_keys))
                 update_columns = sql.SQL(", ").join(
@@ -180,6 +187,7 @@ class AkUtilTools(UtilTools):
                     SELECT * FROM {} 
                     ON CONFLICT ({}) DO UPDATE SET {}
                 """).format(sql.Identifier(table_name), sql.Identifier(temp_table_name), conflict_target, update_columns)
+                logger.debug(f"Executing insert SQL: {insert_sql}")
                 _cursor.execute(insert_sql)
 
                 conn.commit()
@@ -188,7 +196,6 @@ class AkUtilTools(UtilTools):
             conn.rollback()
             logger.error(f"Failed to load data from CSV: {e}")
             raise
-
 
     @staticmethod
     def get_columns_from_table(pg_conn, table_name, redis_conn: redis.Redis, ttl: int = con.DEFAULT_REDIS_TTL):
