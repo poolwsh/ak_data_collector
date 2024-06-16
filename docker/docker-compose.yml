@@ -60,8 +60,8 @@ services:
       - AIRFLOW__CELERY__WORKER_CONCURRENCY=16
     volumes:
       - ../airflow/dags:/opt/airflow/dags
-      - ${HOME}/airflow_data/log:/data/airflow/log
-      - ${HOME}/airflow_data/cache:/data/airflow/cache
+      - ${HOME}/airflow_data/log:/opt/airflow/log
+      - ${HOME}/airflow_data/cache:/opt/airflow/cache
       - ../airflow/airflow.cfg:/opt/airflow/airflow.cfg
     networks:
       - stock_data_service_network
