@@ -63,10 +63,11 @@ $DOCKER_COMPOSE_CMD up -d
 sleep 10
 
 # Ensure the log and cache directories inside the container have correct permissions
-docker exec -u root $($DOCKER_COMPOSE_CMD ps -q airflow) bash -c "chown -R airflow:root /data/airflow/log && chmod -R 755 /data/airflow/log"
-docker exec -u root $($DOCKER_COMPOSE_CMD ps -q airflow) bash -c "chown -R airflow:root /data/airflow/cache && chmod -R 755 /data/airflow/cache"
+docker exec -u root $($DOCKER_COMPOSE_CMD ps -q airflow) bash -c "chown -R airflow:root /opt/airflow/log && chmod -R 755 /opt/airflow/log"
+docker exec -u root $($DOCKER_COMPOSE_CMD ps -q airflow) bash -c "chown -R airflow:root /opt/airflow/cache && chmod -R 755 /opt/airflow/cache"
 
 # Show logs for timescaledb and airflow
+$DOCKER_COMPOSE_CMD logs redis
 $DOCKER_COMPOSE_CMD logs timescaledb
 $DOCKER_COMPOSE_CMD logs airflow
 $DOCKER_COMPOSE_CMD logs api_service
