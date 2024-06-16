@@ -67,7 +67,7 @@ def get_board_list(board_list_func_name: str):
             logger.warning(f"No CSV file created for {board_list_func_name}, skipping database insertion.")
             return
         
-        dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{board_list_func_name}')
+        dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{board_list_func_name}', task_cache_conn)
 
     except Exception as e:
         logger.error(f"Failed to process data for {board_list_func_name}: {str(e)}")
@@ -112,14 +112,16 @@ def store_board_list(board_list_func_name: str):
 def save_tracing_board_list(board_list_func_name: str):
     redis_key = get_redis_key(STORED_KEYS_KEY_PREFIX, board_list_func_name)
     date_list = dguf.read_list_from_redis(redis_key, task_cache_conn)
+
     logger.info(date_list)
     if not date_list:
         logger.info(f"No dates to process for {board_list_func_name}")
         return
-
+    if len(date_list) != 1:
+        raise AirflowException(f"Expected exactly one date to process for {board_list_func_name}, but got: {date_list}")
     try:
         conn = PGEngine.get_conn()
-        dguf.insert_tracing_date_data(conn, board_list_func_name, date_list)
+        dguf.insert_tracing_date_data(conn, board_list_func_name, date_list[0])
         logger.info(f"Tracing data saved for {board_list_func_name} on dates: {date_list}")
     except Exception as e:
         logger.error(f"Failed to save tracing data for {board_list_func_name}: {str(e)}")
@@ -157,7 +159,7 @@ def get_board_cons(board_list_func_name: str, board_cons_func_name: str):
         if temp_csv_path is None:
             raise AirflowException(f"No CSV file created for {board_cons_func_name}, skipping database insertion.")
         
-        dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{board_cons_func_name}')
+        dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{board_cons_func_name}', task_cache_conn)
 
     except Exception as e:
         logger.error(f"Failed to process data for {board_cons_func_name}: {str(e)}")
@@ -166,7 +168,6 @@ def get_board_cons(board_list_func_name: str, board_cons_func_name: str):
     finally:
         if conn:
             PGEngine.release_conn(conn)
-
 
 def store_board_cons(board_cons_func_name: str):
     logger.info(f"Starting data storage operations for {board_cons_func_name}")
@@ -195,8 +196,6 @@ def store_board_cons(board_cons_func_name: str):
     finally:
         if conn:
             PGEngine.release_conn(conn)
-
-
 
 def save_tracing_board_cons(board_cons_func_name: str, param_name: str):
     redis_key = get_redis_key(STORED_KEYS_KEY_PREFIX, board_cons_func_name)
@@ -338,9 +337,9 @@ def generate_dag(board_list_func_name: str, board_cons_func_name: str):
     return dag
 
 ak_func_name_list = [
-    ['stock_board_concept_name_ths', 'stock_board_concept_cons_ths'],
+    # ['stock_board_concept_name_ths', 'stock_board_concept_cons_ths'],
     ['stock_board_concept_name_em', 'stock_board_concept_cons_em'],
-    ['stock_board_industry_summary_ths', 'stock_board_industry_cons_ths'],
+    # ['stock_board_industry_summary_ths', 'stock_board_industry_cons_ths'],
     ['stock_board_industry_name_em', 'stock_board_industry_cons_em']
 ]
 

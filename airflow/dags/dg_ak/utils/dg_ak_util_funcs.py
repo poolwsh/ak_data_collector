@@ -39,7 +39,7 @@ class DgAkUtilFuncs(AkUtilTools):
             td_list = DgAkUtilFuncs.get_trade_dates(pg_conn)
             td_list.sort(reverse=True)  
             if con.DEBUG_MODE:
-                logger.debug(f'first 5 td_list:{td_list[:5]}')
+                logger.debug(f'first 5 td_list:\n{td_list[:5]}')
 
             if reference_date is None or reference_date not in td_list:
                 if reference_date is not None:
@@ -51,7 +51,7 @@ class DgAkUtilFuncs(AkUtilTools):
                 logger.debug(f'lookback_days={lookback_days}, reference_date={reference_date}')
             selected_dates = td_list[:start_index + lookback_days + 1]
             if con.DEBUG_MODE:
-                logger.debug(f'first 5 selected_dates:{selected_dates[:5]}')
+                logger.debug(f'first 5 selected_dates:\n{selected_dates[:5]}')
 
             return selected_dates
 
@@ -90,7 +90,7 @@ class DgAkUtilFuncs(AkUtilTools):
         _i_df.rename(columns=DgAkUtilFuncs.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
         _i_df['i_code'] = i_code
         if DEBUG_MODE:
-            logger.debug(f'Processed i_code data for {i_code}, length: {len(_i_df)}, first 5 rows: {_i_df.head().to_dict(orient="records")}')
+            logger.debug(f'Processed i_code data for {i_code}, length: {len(_i_df)}, \nfirst 5 rows: \n{_i_df.head()}')
         return _i_df
     
     @staticmethod
@@ -129,7 +129,7 @@ class DgAkUtilFuncs(AkUtilTools):
         _s_df.rename(columns=DgAkUtilFuncs.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
         _s_df['s_code'] = s_code
         if DEBUG_MODE:
-            logger.debug(f'Processed s_code data for {s_code}, length: {len(_s_df)}, first 5 rows: {_s_df.head().to_dict(orient="records")}')
+            logger.debug(f'Processed s_code data for {s_code}, length: {len(_s_df)}, \nfirst 5 rows: \n{_s_df.head()}')
         return _s_df
 
     @staticmethod
@@ -144,7 +144,7 @@ class DgAkUtilFuncs(AkUtilTools):
                 _trade_dates = [row[0] for row in rows]  # Use index 0 to access the first element of the tuple
                 logger.info("Trade dates retrieved successfully from dg_ak_stock_zh_a_trade_date.")
                 if DEBUG_MODE:
-                    logger.debug(f"Trade dates length: {len(_trade_dates)}, first 5 dates: {_trade_dates[:5]}")
+                    logger.debug(f"Trade dates length: {len(_trade_dates)}, \nfirst 5 dates: \n{_trade_dates[:5]}")
                 return _trade_dates
             except Exception as _e:
                 logger.error(f"Failed to retrieve trade dates: {_e}")
@@ -166,7 +166,7 @@ class DgAkUtilFuncs(AkUtilTools):
                 if _result is not None and not _result.empty:
                     logger.info(f'get {len(_result)} data.')
                     if DEBUG_MODE:
-                        logger.debug(f"Retrieved data length: {len(_result)}, first 5 rows: {_result.head().to_dict(orient='records')}")
+                        logger.debug(f"Retrieved data length: {len(_result)}, \nfirst 5 rows: \n{_result.head()}")
                     return _result
                 else:
                     logger.warning(f"No data retrieved in attempt {_attempt + 1}.")
@@ -218,7 +218,7 @@ class DgAkUtilFuncs(AkUtilTools):
             _df.rename(columns=DgAkUtilFuncs.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
             _df['td'] = _today_date  # Add a new column 'date' with today's date
             if DEBUG_MODE:
-                logger.debug(f"Retrieved data for today length: {len(_df)}, first 5 rows: {_df.head()}")
+                logger.debug(f"Retrieved data for today length: {len(_df)}, \nfirst 5 rows: \n{_df.head()}")
             return _df
         except Exception as _e:
             logger.error(f"Error calling function {ak_func_name} for today ({_today_date}): {_e}\n{traceback.format_exc()}")
@@ -245,7 +245,7 @@ class DgAkUtilFuncs(AkUtilTools):
         _df = DgAkUtilFuncs.remove_cols(_df, ak_cols_config_dict[ak_func_name])
         _df.rename(columns=DgAkUtilFuncs.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
         if DEBUG_MODE:
-            logger.debug(f"length: {len(_df)}, first 5 rows: {_df.head()}")
+            logger.debug(f"length: {len(_df)}, \nfirst 5 rows: \n{_df.head()}")
         return _df
 
     @staticmethod
@@ -272,7 +272,7 @@ class DgAkUtilFuncs(AkUtilTools):
         _df.rename(columns=DgAkUtilFuncs.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
         _df = DgAkUtilFuncs.add_td(_df, td)
         if DEBUG_MODE:
-            logger.debug(f"Retrieved data for date {td}, length: {len(_df)}, first 5 rows: {_df.head()}")
+            logger.debug(f"Retrieved data for date {td}, length: {len(_df)}, \nfirst 5 rows: \n{_df.head()}")
         return _df
 
     @staticmethod
@@ -280,7 +280,7 @@ class DgAkUtilFuncs(AkUtilTools):
         _combined_df = pd.DataFrame()
         _retry_count = 0
         if DEBUG_MODE:
-            logger.debug(f"Fetching data for date list length: {len(td_list)}\nfirst 5 dates: {td_list[:5]}")
+            logger.debug(f"Fetching data for date list length: {len(td_list)}\nfirst 5 dates: \n{td_list[:5]}")
 
         _total_list = len(td_list)
         for _index, _td in enumerate(td_list):
@@ -307,13 +307,15 @@ class DgAkUtilFuncs(AkUtilTools):
                     _retry_count += 1
 
         if DEBUG_MODE:
-            logger.debug(f"Combined data length: {len(_combined_df)}, \nfirst 5 rows: {_combined_df.head()}")
+            logger.debug(f"Combined data length: {len(_combined_df)}, \nfirst 5 rows: \n{_combined_df.head()}")
         return _combined_df
 
     @staticmethod
     def get_data_by_board_names(ak_func_name: str, ak_cols_config_dict: dict, board_names: list[str], date_format: str = '%Y-%m-%d') -> pd.DataFrame:
         all_data = []
-        for _b_name in board_names:
+        _len_board_names = len(board_names)
+        for _index, _b_name in enumerate(board_names):
+            logger.info(f'({_index + 1}/{_len_board_names}) Fetching data for b_name={_b_name}')
             try:
                 _data_func = getattr(ak, ak_func_name, None)
                 if _data_func is None:
@@ -339,7 +341,7 @@ class DgAkUtilFuncs(AkUtilTools):
             _today_date = datetime.now().strftime(date_format)
             _combined_df['td'] = _today_date
             if DEBUG_MODE:
-                logger.debug(f"Combined data for all boards length: {len(_combined_df)}, first 5 rows: {_combined_df.head()}")
+                logger.debug(f"Combined data for all boards length: {len(_combined_df)}, \nfirst 5 rows: \n{_combined_df.head()}")
             return _combined_df
         else:
             return pd.DataFrame()  # Return an empty DataFrame if no data was fetched
@@ -400,7 +402,7 @@ class DgAkUtilFuncs(AkUtilTools):
             _df = pd.DataFrame(rows, columns=columns)
             logger.info(f"Data retrieved from {tracing_table_name} successfully.")
             if DEBUG_MODE:
-                logger.debug(f"Tracing data length: {len(_df)}, first 5 rows: {_df.head().to_dict(orient='records')}")
+                logger.debug(f"Tracing data length: {len(_df)}, \nfirst 5 rows: \n{_df.head()}")
             return _df
         except SQLAlchemyError as _e:
             logger.error(f"Failed to retrieve data from {tracing_table_name}: {_e}")
@@ -443,7 +445,7 @@ class DgAkUtilFuncs(AkUtilTools):
         for _date, _value in date_values:
             _data.append((ak_func_name, param_name, _value, _date, _current_time, _current_time, _host_name))
         if DEBUG_MODE:
-            logger.debug(f"Prepared tracing data length: {len(_data)}, first 5 rows: {_data[:5]}")
+            logger.debug(f"Prepared tracing data length: {len(_data)}, \nfirst 5 rows: \n{_data[:5]}")
         return _data
 
     @staticmethod
@@ -457,7 +459,7 @@ class DgAkUtilFuncs(AkUtilTools):
             conn.commit()
             logger.info("Tracing data inserted/updated successfully.")
             if DEBUG_MODE:
-                logger.debug(f"Inserted tracing data length: {len(data)}, first 5 rows: {data[:5]}")
+                logger.debug(f"Inserted tracing data length: {len(data)}, \nfirst 5 rows: \n{data[:5]}")
         except Exception as _e:
             conn.rollback()
             logger.error(f"Failed to insert/update tracing data: {_e}")
@@ -521,10 +523,48 @@ class DgAkUtilFuncs(AkUtilTools):
         return False
 
     @staticmethod
-    def get_b_names_from_date(pg_conn, table_name: str, date: str) -> List[str]:
+    def get_b_names_from_date(pg_conn, table_name: str, target_date: str) -> List[str]:
+        # Define the query to get distinct b_name values for the given date
         query = f"SELECT DISTINCT b_name FROM {table_name} WHERE td = %s"
+        
         with pg_conn.cursor() as cursor:
-            cursor.execute(query, (date,))
+            # Execute the query with the target date
+            cursor.execute(query, (target_date,))
             results = cursor.fetchall()
-        return [row[0] for row in results]
+        
+        # If no results found for the target date
+        if not results:
+            # Define a query to find the closest previous date with entries
+            closest_date_query = f"""
+                SELECT DISTINCT td
+                FROM {table_name}
+                WHERE td < %s
+                ORDER BY td DESC
+                LIMIT 1
+            """
+            with pg_conn.cursor() as cursor:
+                # Execute the query to find the closest previous date
+                cursor.execute(closest_date_query, (target_date,))
+                closest_date_result = cursor.fetchone()
+            
+            # If a closest previous date is found
+            if closest_date_result:
+                closest_date = closest_date_result[0]
+                with pg_conn.cursor() as cursor:
+                    # Execute the query again with the closest previous date
+                    cursor.execute(query, (closest_date,))
+                    results = cursor.fetchall()
+                actual_date = closest_date
+            else:
+                actual_date = None
+        else:
+            actual_date = target_date
+
+        # Log debug information if DEBUG_MODE is enabled
+        if DEBUG_MODE:
+            logger.debug(f"Query results for table '{table_name}' on date '{target_date}': {results}")
+            logger.debug(f"Actual date for the retrieved data: {actual_date}")
+        
+        # Return the list of distinct b_name values
+        return [row[0] for row in results], actual_date  # Include the actual date in the return value
 
