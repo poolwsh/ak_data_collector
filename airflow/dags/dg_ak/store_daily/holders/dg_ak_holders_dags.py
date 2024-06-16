@@ -67,23 +67,14 @@ def get_dates_based_on_tracing(conn, ak_func_name):
 
 def get_holders_data(pg_conn, ak_func_name, date_list, temp_dir=con.CACHE_ROOT):
     _ak_data_df = dgakuf.get_data_by_td_list(ak_func_name, ak_cols_config_dict, date_list)
-    
-    _desired_columns = [col[0] for col in dgakuf.get_columns_from_table(pg_conn, f'dg_ak_{ak_func_name}', task_cache_conn)]
-    try:
-        _ak_data_df = _ak_data_df[_desired_columns]
-        _int_columns = ['cur_sh', 'pre_sh']  # Add other integer columns as needed
-        for _col in _int_columns:
-            if _col in _ak_data_df.columns:
-                _ak_data_df[_col] = _ak_data_df[_col].astype('Int64')
-    except KeyError as e:
-        logger.error(f"KeyError while selecting columns for {ak_func_name}: {str(e)}")
-        raise
-    os.makedirs(temp_dir, exist_ok=True)
-    _temp_csv_path = os.path.join(temp_dir, f'{ak_func_name}.csv')
-    _ak_data_df.to_csv(_temp_csv_path, index=False, header=False)
-
-    if DEBUG_MODE:
-        logger.debug(f"Data saved to CSV at {_temp_csv_path}, length: {len(_ak_data_df)}, first 5 rows: {_ak_data_df.head().to_dict(orient='records')}")
+    _ak_data_df = dgakuf.convert_columns(_ak_data_df, f'dg_ak_{ak_func_name}', pg_conn, task_cache_conn)
+    _int_columns = ['cur_sh', 'pre_sh']  # Add other integer columns as needed
+    for _col in _int_columns:
+        if _col in _ak_data_df.columns:
+            _ak_data_df[_col] = _ak_data_df[_col].astype('Int64')
+    _temp_csv_path = dgakuf.save_data_to_csv(_ak_data_df, f'{ak_func_name}')
+    if _temp_csv_path is None:
+        raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
     return _temp_csv_path
 
 def update_tracing_table(conn, ak_func_name, date_list):
@@ -95,25 +86,18 @@ def update_tracing_table(conn, ak_func_name, date_list):
 
 def get_store_and_update_data(ak_func_name: str):
     logger.info(f"Starting to get, store, and update data for {ak_func_name}")
-    conn = None
     try:
-        conn = PGEngine.get_conn()
-        if not conn:
-            raise AirflowException("Failed to get database connection")
-
-        selected_date_list = get_dates_based_on_tracing(conn, ak_func_name)
-        if DEBUG_MODE:
-            logger.debug(f'td_list:{selected_date_list[:5]}')
-        temp_csv_path = get_holders_data(conn, ak_func_name, selected_date_list)
-        dgakuf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}', task_cache_conn)
-        update_tracing_table(conn, ak_func_name, selected_date_list)
+        with PGEngine.managed_conn() as conn:
+            selected_date_list = get_dates_based_on_tracing(conn, ak_func_name)
+            if DEBUG_MODE:
+                logger.debug(f'td_list:{selected_date_list[:5]}')
+            temp_csv_path = get_holders_data(conn, ak_func_name, selected_date_list)
+            dgakuf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}', task_cache_conn)
+            update_tracing_table(conn, ak_func_name, selected_date_list)
 
     except Exception as e:
         logger.error(f"Failed to get, store, and update data for {ak_func_name}: {str(e)}")
         raise AirflowException(e)
-    finally:
-        if conn:
-            PGEngine.release_conn(conn)
 
 ak_func_name_mapping = {
     'stock_hold_num_cninfo': '股东人数'
@@ -149,7 +133,7 @@ def generate_dag(ak_func_name: str):
     )
 
     task = PythonOperator(
-        task_id='get_data',
+        task_id='get_holders',
         python_callable=get_store_and_update_data,
         op_kwargs={'ak_func_name': ak_func_name},
         dag=dag,
