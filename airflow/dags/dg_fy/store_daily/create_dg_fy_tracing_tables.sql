@@ -41,16 +41,17 @@ CREATE TABLE dg_fy_stock_us_trade_date (
 
 
 CREATE TABLE dg_fy_stock_us_hist_daily_bfq (
-    symbol VARCHAR(20) NOT NULL,    -- 股票代码，作为主键的第一部分
-    td DATE NOT NULL,               -- 交易日期，作为主键的第二部分
-    o FLOAT,                        -- 开盘价
-    c FLOAT,                        -- 收盘价
-    h FLOAT,                        -- 最高价
-    l FLOAT,                        -- 最低价
-    v BIGINT,                       -- 成交量
-    adj_close FLOAT,                -- 调整后的收盘价
-    dividends FLOAT,                -- 分红
-    stock_splits FLOAT,             -- 股票拆分
-    PRIMARY KEY (symbol, td)        -- 组合主键：股票代码和交易日期
+    symbol VARCHAR(20) NOT NULL,    -- Stock code, first part of the primary key
+    td DATE NOT NULL,               -- Trading date, second part of the primary key
+    o FLOAT,                        -- Opening price
+    c FLOAT,                        -- Closing price
+    h FLOAT,                        -- Highest price
+    l FLOAT,                        -- Lowest price
+    v BIGINT,                       -- Trading volume
+    adj_close FLOAT,                -- Adjusted closing price
+    dividends FLOAT,                -- Dividends
+    stock_splits FLOAT,             -- Stock splits
+    PRIMARY KEY (symbol, td)        -- Composite primary key: stock code and trading date
 );
 SELECT create_hypertable('dg_fy_stock_us_hist_daily_bfq', 'td');
+
