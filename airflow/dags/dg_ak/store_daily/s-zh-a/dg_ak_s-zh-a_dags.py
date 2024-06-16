@@ -81,7 +81,6 @@ def update_tracing_table_bulk(ak_func_name: str, period: str, adjust: str, updat
         if conn:
             PGEngine.release_conn(conn)
 
-
 def update_trade_dates(conn, trade_dates):
     insert_date_sql = f"""
         INSERT INTO {TRADE_DATE_TABLE_NAME} (trade_date, create_time, update_time)
@@ -91,6 +90,31 @@ def update_trade_dates(conn, trade_dates):
     with conn.cursor() as cursor:
         cursor.executemany(insert_date_sql, [(date,) for date in trade_dates])
     conn.commit()
+
+def process_batch_data(ak_func_name, period, adjust, combined_df, all_trade_dates, conn):
+    if DEBUG_MODE:
+        logger.debug(f"Combined DataFrame columns for {ak_func_name}: {combined_df.columns}")
+
+    combined_df['s_code'] = combined_df['s_code'].astype(str)
+    combined_df = dgakuf.convert_columns(combined_df, f'dg_ak_{ak_func_name}_{period}_{adjust}', conn, task_cache_conn)
+
+    if 'td' in combined_df.columns:
+        combined_df['td'] = pd.to_datetime(combined_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
+
+    temp_csv_path = dgakuf.save_data_to_csv(combined_df, f'{ak_func_name}_{period}_{adjust}')
+    if temp_csv_path is None:
+        raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
+
+   
+    dgakuf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}_{period}_{adjust}', task_cache_conn)
+
+   
+    update_trade_dates(conn, all_trade_dates)
+
+    last_td = combined_df['td'].max()
+    updates = [(s_code, last_td) for s_code in combined_df['s_code'].unique()]
+
+    update_tracing_table_bulk(ak_func_name, period, adjust, updates)
 
 def prepare_arg_list(ak_func_name: str, period: str, adjust: str):
     conn = None
@@ -121,31 +145,6 @@ def prepare_arg_list(ak_func_name: str, period: str, adjust: str):
     finally:
         if conn:
             PGEngine.release_conn(conn)
-
-def process_batch_data(ak_func_name, period, adjust, combined_df, all_trade_dates, conn):
-    if DEBUG_MODE:
-        logger.debug(f"Combined DataFrame columns for {ak_func_name}: {combined_df.columns}")
-
-    combined_df['s_code'] = combined_df['s_code'].astype(str)
-    combined_df = dgakuf.convert_columns(combined_df, f'dg_ak_{ak_func_name}_{period}_{adjust}', conn, task_cache_conn)
-
-    if 'td' in combined_df.columns:
-        combined_df['td'] = pd.to_datetime(combined_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
-
-    temp_csv_path = dgakuf.save_data_to_csv(combined_df, f'{ak_func_name}_{period}_{adjust}')
-    if temp_csv_path is None:
-        raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
-
-   
-    dgakuf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}_{period}_{adjust}', task_cache_conn)
-
-   
-    update_trade_dates(conn, all_trade_dates)
-
-    last_td = combined_df['td'].max()
-    updates = [(s_code, last_td) for s_code in combined_df['s_code'].unique()]
-
-    update_tracing_table_bulk(ak_func_name, period, adjust, updates)
 
 def process_stock_data(ak_func_name: str, period: str, adjust: str):
     conn = None
@@ -228,7 +227,6 @@ def retry_failed_stocks(ak_func_name: str, period: str, adjust: str):
     except Exception as e:
         logger.error(f"Failed to retry stocks for {ak_func_name}: {e}")
         raise AirflowException(e)
-
 
 def generate_dag_name(stock_func, period, adjust) -> str:
     adjust_mapping = {
