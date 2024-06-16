@@ -278,7 +278,7 @@ def generate_dag():
         start_date=days_ago(1),
         schedule=dauf.generate_random_minute_schedule(hour=8),
         catchup=False,
-        tags=['akshare', '个股价格', '横向'],
+        tags=['a-akshare', 'stock-price', 'horizontal'],
         max_active_runs=1,
     )
 
@@ -290,7 +290,5 @@ def generate_dag():
 
     return dag
 
-globals()['ak_dg_price_hl'] = generate_dag()
+globals()['dg_ak_price_hl'] = generate_dag()
 
-if __name__ == "__main__":
-    process_and_store_data()
