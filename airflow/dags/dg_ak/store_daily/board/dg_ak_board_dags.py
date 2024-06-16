@@ -2,16 +2,13 @@ from __future__ import annotations
 import os
 import sys
 
-
-
 import random
 import pandas as pd
 from datetime import timedelta, datetime
-from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dguf
+from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dgakuf
 from dags.utils.db import PGEngine, task_cache_conn
 from dags.utils.logger import logger
 from dags.dg_ak.utils.dg_ak_config import dgak_config as con
-
 
 from airflow.exceptions import AirflowException
 from airflow.models.dag import DAG
@@ -25,196 +22,68 @@ from pathlib import Path
 current_path = Path(__file__).resolve().parent 
 config_path = current_path / 'dg_ak_board_config.py'
 sys.path.append(config_path.parent.as_posix())
-ak_cols_config_dict = dguf.load_ak_cols_config(config_path.as_posix())
+ak_cols_config_dict = dgakuf.load_ak_cols_config(config_path.as_posix())
 
-# 统一定义Redis keys
 BOARD_LIST_KEY_PREFIX = "board_list"
-STORED_KEYS_KEY_PREFIX = "stored_board_keys"
 
 def get_redis_key(base_key: str, identifier: str) -> str:
     return f"{base_key}@{identifier}"
 
-
-def get_board_list(board_list_func_name: str):
-    logger.info(f"Downloading board list for {board_list_func_name}")
+def download_and_store_board_list(board_list_func_name: str):
+    logger.info(f"Starting combined operations for downloading and storing board list for {board_list_func_name}")
     try:
-        conn = PGEngine.get_conn()
-        clear_table_sql = f"TRUNCATE TABLE dg_ak_{board_list_func_name};"
-        with conn.cursor() as cursor:
-            cursor.execute(clear_table_sql)
-            conn.commit()
-        logger.info(f"Table dg_ak_{board_list_func_name} has been cleared.")
-
-        board_list_data_df = dguf.get_data_today(board_list_func_name, ak_cols_config_dict)
+        board_list_data_df = dgakuf.get_data_today(board_list_func_name, ak_cols_config_dict)
+        if 'td' in board_list_data_df.columns:
+            board_list_data_df['td'] = pd.to_datetime(board_list_data_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
+        if board_list_data_df.empty:
+            raise AirflowException(f"No data retrieved for {board_list_func_name}")
         if DEBUG_MODE:
             logger.debug(f'length of board_list_data_df: {len(board_list_data_df)}')
             logger.debug(f'head 5 of board_list_data_df:')
             logger.debug(board_list_data_df.head(5))
-        board_list_data_df = dguf.convert_columns(board_list_data_df, f'dg_ak_{board_list_func_name}', conn, task_cache_conn)
-        
-        if 'td' in board_list_data_df.columns:
-            board_list_data_df['td'] = pd.to_datetime(board_list_data_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
-        
-        if board_list_data_df.empty:
-            logger.warning(f"No data retrieved for {board_list_func_name}")
-            return
 
+        with PGEngine.managed_conn() as conn:
+            board_list_data_df = dgakuf.convert_columns(board_list_data_df, f'dg_ak_{board_list_func_name}', conn, task_cache_conn)
+            redis_key = get_redis_key(BOARD_LIST_KEY_PREFIX, board_list_func_name)
+            dgakuf.write_df_to_redis(redis_key, board_list_data_df, task_cache_conn, con.DEFAULT_REDIS_TTL)
+            temp_csv_path = dgakuf.save_data_to_csv(board_list_data_df, f'{board_list_func_name}')
+            if temp_csv_path is None:
+                raise AirflowException(f"No CSV file created for {board_list_func_name}, skipping database insertion.")
+            dgakuf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{board_list_func_name}', task_cache_conn)
+            dgakuf.insert_tracing_date_data(conn, board_list_func_name, board_list_data_df['td'].max())
+
+    except Exception as e:
+        logger.error(f"Failed during combined operations for {board_list_func_name}: {str(e)}")
+        conn.rollback()
+        raise AirflowException(e)
+
+def download_and_store_board_cons(board_list_func_name: str, board_cons_func_name: str, param_name: str):
+    logger.info(f"Starting combined operations for downloading and storing board constituents for {board_cons_func_name}")
+
+    try:
         redis_key = get_redis_key(BOARD_LIST_KEY_PREFIX, board_list_func_name)
-        dguf.write_df_to_redis(redis_key, board_list_data_df, task_cache_conn, con.DEFAULT_REDIS_TTL)
-
-        temp_csv_path = dguf.save_data_to_csv(board_list_data_df, board_list_func_name, include_header=True)
-        if temp_csv_path is None:
-            logger.warning(f"No CSV file created for {board_list_func_name}, skipping database insertion.")
-            return
-        
-        dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{board_list_func_name}', task_cache_conn)
-
-    except Exception as e:
-        logger.error(f"Failed to process data for {board_list_func_name}: {str(e)}")
-        conn.rollback()
-        raise AirflowException(e)
-    finally:
-        if conn:
-            PGEngine.release_conn(conn)
-
-
-
-def store_board_list(board_list_func_name: str):
-    logger.info(f"Starting data storage operations for {board_list_func_name}")
-
-    insert_sql = f"""
-        INSERT INTO dg_ak_{board_list_func_name}_store
-        SELECT * FROM dg_ak_{board_list_func_name}
-        ON CONFLICT (td, b_name) DO NOTHING
-        RETURNING td;
-    """
-
-    try:
-        conn = PGEngine.get_conn()
-        with conn.cursor() as cursor:
-            cursor.execute(insert_sql)
-            inserted_rows = cursor.fetchall()
-            conn.commit()
-        
-        dates = list(set(row[0].strftime('%Y-%m-%d') for row in inserted_rows))  # 转换为字符串
-        redis_key = get_redis_key(STORED_KEYS_KEY_PREFIX, board_list_func_name)
-        dguf.write_list_to_redis(redis_key, dates, task_cache_conn, con.DEFAULT_REDIS_TTL)
-        logger.info(f"Data operation completed successfully for {board_list_func_name}. Dates: {dates}")
-    except Exception as e:
-        logger.error(f"Failed during data operations for {board_list_func_name}: {str(e)}")
-        conn.rollback()
-        raise AirflowException(e)
-    finally:
-        if conn:
-            PGEngine.release_conn(conn)
-
-
-def save_tracing_board_list(board_list_func_name: str):
-    redis_key = get_redis_key(STORED_KEYS_KEY_PREFIX, board_list_func_name)
-    date_list = dguf.read_list_from_redis(redis_key, task_cache_conn)
-
-    logger.info(date_list)
-    if not date_list:
-        logger.info(f"No dates to process for {board_list_func_name}")
-        return
-    if len(date_list) != 1:
-        raise AirflowException(f"Expected exactly one date to process for {board_list_func_name}, but got: {date_list}")
-    try:
-        conn = PGEngine.get_conn()
-        dguf.insert_tracing_date_data(conn, board_list_func_name, date_list[0])
-        logger.info(f"Tracing data saved for {board_list_func_name} on dates: {date_list}")
-    except Exception as e:
-        logger.error(f"Failed to save tracing data for {board_list_func_name}: {str(e)}")
-        conn.rollback()
-        raise AirflowException(e)
-    finally:
-        if conn:
-            PGEngine.release_conn(conn)
-
-
-def get_board_cons(board_list_func_name: str, board_cons_func_name: str):
-    logger.info(f"Starting to save data for {board_cons_func_name}")
-
-    try:
-        conn = PGEngine.get_conn()
-        clear_table_sql = f"TRUNCATE TABLE dg_ak_{board_cons_func_name};"
-        with conn.cursor() as cursor:
-            cursor.execute(clear_table_sql)
-            conn.commit()
-        logger.info(f"Table dg_ak_{board_cons_func_name} has been cleared.")
-
-        redis_key = get_redis_key(BOARD_LIST_KEY_PREFIX, board_list_func_name)
-        board_list_df = dguf.read_df_from_redis(redis_key, task_cache_conn)
-        
+        board_list_df = dgakuf.read_df_from_redis(redis_key, task_cache_conn)
         if board_list_df.empty:
             raise AirflowException(f"No dates available for {board_list_func_name}, skipping data fetch.")
-        
-        board_cons_df = dguf.get_data_by_board_names(board_cons_func_name, ak_cols_config_dict, board_list_df['b_name'])
-        board_cons_df = dguf.convert_columns(board_cons_df, f'dg_ak_{board_cons_func_name}', conn, task_cache_conn)
-        
+        board_cons_df = dgakuf.get_data_by_board_names(board_cons_func_name, ak_cols_config_dict, board_list_df['b_name'])
+        board_cons_df['s_code'] = board_cons_df['s_code'].astype(str) 
+        today_date = datetime.now().strftime('%Y-%m-%d')
+        board_cons_df['td'] = today_date
         if 'td' in board_cons_df.columns:
             board_cons_df['td'] = pd.to_datetime(board_cons_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
-        
-        temp_csv_path = dguf.save_data_to_csv(board_cons_df, board_cons_func_name)
-        if temp_csv_path is None:
-            raise AirflowException(f"No CSV file created for {board_cons_func_name}, skipping database insertion.")
-        
-        dguf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{board_cons_func_name}', task_cache_conn)
 
+        with PGEngine.managed_conn() as conn:
+            board_cons_df = dgakuf.convert_columns(board_cons_df, f'dg_ak_{board_cons_func_name}', conn, task_cache_conn)
+
+            temp_csv_path = dgakuf.save_data_to_csv(board_cons_df, f'{board_cons_func_name}')
+            if temp_csv_path is None:
+                raise AirflowException(f"No CSV file created for {board_cons_func_name}, skipping database insertion.")
+            dgakuf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{board_cons_func_name}', task_cache_conn)
+            dgakuf.insert_tracing_date_data(conn, board_cons_func_name, board_cons_df['td'].max())
     except Exception as e:
-        logger.error(f"Failed to process data for {board_cons_func_name}: {str(e)}")
+        logger.error(f"Failed during combined operations for {board_cons_func_name}: {str(e)}")
         conn.rollback()
         raise AirflowException(e)
-    finally:
-        if conn:
-            PGEngine.release_conn(conn)
-
-def store_board_cons(board_cons_func_name: str):
-    logger.info(f"Starting data storage operations for {board_cons_func_name}")
-
-    insert_sql = f"""
-        INSERT INTO dg_ak_{board_cons_func_name}_store
-        SELECT * FROM dg_ak_{board_cons_func_name}
-        ON CONFLICT (td, s_code, b_name) DO NOTHING
-        RETURNING td, b_name;
-    """
-
-    try:
-        conn = PGEngine.get_conn()
-        with conn.cursor() as cursor:
-            cursor.execute(insert_sql)
-            inserted_rows = cursor.fetchall()
-            conn.commit()
-        keys = list(set({(row[0].strftime('%Y-%m-%d'), row[1]) for row in inserted_rows}))  # 转换为字符串
-        redis_key = get_redis_key(STORED_KEYS_KEY_PREFIX, board_cons_func_name)
-        dguf.write_list_to_redis(redis_key, keys, task_cache_conn, con.DEFAULT_REDIS_TTL)
-        logger.info(f"Data operation completed successfully for {board_cons_func_name}.")
-    except Exception as e:
-        logger.error(f"Failed during data operations for {board_cons_func_name}: {str(e)}")
-        conn.rollback()
-        raise AirflowException(e)
-    finally:
-        if conn:
-            PGEngine.release_conn(conn)
-
-def save_tracing_board_cons(board_cons_func_name: str, param_name: str):
-    redis_key = get_redis_key(STORED_KEYS_KEY_PREFIX, board_cons_func_name)
-    cons_data = dguf.read_list_from_redis(redis_key, task_cache_conn)
-    if not cons_data:
-        logger.info(f"No constituent data to process for {board_cons_func_name}")
-        return
-
-    try:
-        conn = PGEngine.get_conn()
-        dguf.insert_tracing_date_1_param_data(conn, board_cons_func_name, param_name, cons_data)
-        logger.info(f"Tracing data saved for {board_cons_func_name} with parameter data.")
-    except Exception as e:
-        logger.error(f"Failed during data operations for {board_cons_func_name}: {str(e)}")
-        conn.rollback()
-        raise AirflowException(e)
-    finally:
-        if conn:
-            PGEngine.release_conn(conn)
 
 def generate_dag_name(board_list_func_name: str, board_cons_func_name: str) -> str:
     type_mapping = {
@@ -231,29 +100,25 @@ def generate_dag_name(board_list_func_name: str, board_cons_func_name: str) -> s
 
 def is_trading_day(**kwargs) -> str:
     try:
-        conn = PGEngine.get_conn()
-        trade_dates = dguf.get_trade_dates(conn)
-        trade_dates.sort(reverse=True)
-        if DEBUG_MODE:
-            today_str = max(trade_dates).strftime('%Y-%m-%d')
-        else:
-            today_str = datetime.now().strftime('%Y-%m-%d')
-        today = datetime.strptime(today_str, '%Y-%m-%d').date()
+        with PGEngine.managed_conn() as conn:
+            trade_dates = dgakuf.get_trade_dates(conn)
+            trade_dates.sort(reverse=True)
+            if DEBUG_MODE:
+                today_str = max(trade_dates).strftime('%Y-%m-%d')
+            else:
+                today_str = datetime.now().strftime('%Y-%m-%d')
+            today = datetime.strptime(today_str, '%Y-%m-%d').date()
 
-        if DEBUG_MODE:
-            logger.debug(f'today:{today}')
-            logger.debug(f'first 5 trade_dates: {trade_dates[:5]}')
-        if today in trade_dates:
-            return 'continue_task'
-        else:
-            return 'skip_task'
+            if DEBUG_MODE:
+                logger.debug(f'today:{today}')
+                logger.debug(f'first 5 trade_dates: {trade_dates[:5]}')
+            if today in trade_dates:
+                return 'continue_task'
+            else:
+                return 'skip_task'
     except Exception as e:
         logger.error(f"Failed during data operations: {str(e)}")
-        conn.rollback()
         raise AirflowException(e)
-    finally:
-        if conn:
-            PGEngine.release_conn(conn)
 
 def generate_dag(board_list_func_name: str, board_cons_func_name: str):
     logger.info(f"Generating DAG for {board_list_func_name} and {board_cons_func_name}")
@@ -291,47 +156,19 @@ def generate_dag(board_list_func_name: str, board_cons_func_name: str):
         continue_task = DummyOperator(task_id='continue_task')
         skip_task = DummyOperator(task_id='skip_task')
 
-        get_board_list_task = PythonOperator(
-            task_id=f'get_board_list-{board_list_func_name}',
-            python_callable=get_board_list,
+        download_and_store_board_list_task = PythonOperator(
+            task_id=f'download_and_store_board_list-{board_list_func_name}',
+            python_callable=download_and_store_board_list,
             op_kwargs={'board_list_func_name': board_list_func_name},
         )
 
-        store_board_list_task = PythonOperator(
-            task_id=f'store_board_list-{board_list_func_name}',
-            python_callable=store_board_list,
-            op_kwargs={'board_list_func_name': board_list_func_name},
+        download_and_store_board_cons_task = PythonOperator(
+            task_id=f'download_and_store_board_cons-{board_cons_func_name}',
+            python_callable=download_and_store_board_cons,
+            op_kwargs={'board_list_func_name': board_list_func_name, 'board_cons_func_name': board_cons_func_name, 'param_name': 'symbol'},
         )
 
-        save_tracing_board_list_task = PythonOperator(
-            task_id=f'save_tracing_board_list-{board_list_func_name}',
-            python_callable=save_tracing_board_list,
-            op_kwargs={'board_list_func_name': board_list_func_name},
-        )
-
-        get_board_cons_task = PythonOperator(
-            task_id=f'get_board_cons-{board_cons_func_name}',
-            python_callable=get_board_cons,
-            op_kwargs={'board_list_func_name': board_list_func_name, 'board_cons_func_name': board_cons_func_name},
-        )
-
-        store_board_cons_task = PythonOperator(
-            task_id=f'store_board_cons-{board_cons_func_name}',
-            python_callable=store_board_cons,
-            op_kwargs={'board_cons_func_name': board_cons_func_name},
-        )
-
-        save_tracing_board_cons_task = PythonOperator(
-            task_id=f'save_tracing_board_cons-{board_cons_func_name}',
-            python_callable=save_tracing_board_cons,
-            op_kwargs={'board_cons_func_name': board_cons_func_name, 'param_name': 'symbol'},
-	 
-        )
-
-											   
-        check_trading_day >> continue_task >> get_board_list_task >> store_board_list_task >> save_tracing_board_list_task >> get_board_cons_task >> store_board_cons_task >> save_tracing_board_cons_task
-																					
-		 
+        check_trading_day >> continue_task >> download_and_store_board_list_task >> download_and_store_board_cons_task
         check_trading_day >> skip_task
 
     return dag
