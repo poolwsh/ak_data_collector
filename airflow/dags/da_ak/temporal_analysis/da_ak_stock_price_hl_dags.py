@@ -28,30 +28,26 @@ TRACING_TABLE_NAME = 'da_ak_tracing_stock_price_hl'
 MIN_INTERVAL = 3
 NONE_RESULT = 'NULL'
 ROUND_N = 5
-CSV_ROOT = '/tmp/ak_da/p_hl'
+CSV_ROOT = os.path.join(con.CACHE_ROOT, 'p_hl')
 os.makedirs(CSV_ROOT, exist_ok=True)
 
 def get_stock_data(s_code: str) -> pd.DataFrame:
     sql = f"""
-        SELECT * FROM ak_dg_stock_zh_a_hist_daily_hfq 
+        SELECT * FROM dg_ak_stock_zh_a_hist_daily_hfq 
         WHERE s_code = '{s_code}';
     """
     try:
-        conn = PGEngine.get_conn()
-        with conn.cursor() as cursor:
-            cursor.execute(sql)
-            columns = [desc[0] for desc in cursor.description]
-            data = cursor.fetchall()
+        with PGEngine.managed_conn() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql)
+                columns = [desc[0] for desc in cursor.description]
+                data = cursor.fetchall()
         df = pd.DataFrame(data, columns=columns)
         df[['l', 'o', 'c', 'h']] = df[['l', 'o', 'c', 'h']].astype(float)
         return df
     except Exception as e:
         logger.error(f"Failed to fetch data for s_code={s_code}: {str(e)}")
         raise AirflowException(e)
-    finally:
-        if conn:
-            PGEngine.release_conn(conn)
-
 
 def clear_table(conn, table_name):
     try:
@@ -71,91 +67,80 @@ def insert_or_update_data_from_csv(csv_path):
         logger.error("CSV file does not exist.")
         return
     try:
-        conn = PGEngine.get_conn()
-        _cursor = conn.cursor()
- 
-        clear_table(conn, TEMP_PRICE_HL_TABLE_NAME)
+        with PGEngine.managed_conn() as conn:
+            _cursor = conn.cursor()
+    
+            clear_table(conn, TEMP_PRICE_HL_TABLE_NAME)
 
-        with open(csv_path, 'r') as _file:
-            _copy_sql = f"COPY {TEMP_PRICE_HL_TABLE_NAME} FROM STDIN WITH CSV HEADER DELIMITER ','"
-            _cursor.copy_expert(sql=_copy_sql, file=_file)
+            with open(csv_path, 'r') as _file:
+                _copy_sql = f"COPY {TEMP_PRICE_HL_TABLE_NAME} FROM STDIN WITH CSV HEADER DELIMITER ','"
+                _cursor.copy_expert(sql=_copy_sql, file=_file)
 
-        _cursor.execute(f"""
-            INSERT INTO {PRICE_HL_TABLE_NAME} 
-            SELECT * FROM {TEMP_PRICE_HL_TABLE_NAME}
-            ON CONFLICT (s_code, td, interval) DO UPDATE SET
-                hs_h = EXCLUDED.hs_h,
-                hs_l = EXCLUDED.hs_l,
-                d_hs_h = EXCLUDED.d_hs_h,
-                d_hs_l = EXCLUDED.d_hs_l,
-                chg_from_hs = EXCLUDED.chg_from_hs,
-                pct_chg_from_hs = EXCLUDED.pct_chg_from_hs,
-                tg_h = EXCLUDED.tg_h,
-                tg_l = EXCLUDED.tg_l,
-                d_tg_h = EXCLUDED.d_tg_h,
-                d_tg_l = EXCLUDED.d_tg_l,
-                chg_to_tg = EXCLUDED.chg_to_tg,
-                pct_chg_to_tg = EXCLUDED.pct_chg_to_tg
-        """)
-        
-        conn.commit()
-        logger.info(f"Data from {csv_path} successfully loaded and updated into {PRICE_HL_TABLE_NAME}.")
-        
-        _cursor.close()
+            _cursor.execute(f"""
+                INSERT INTO {PRICE_HL_TABLE_NAME} 
+                SELECT * FROM {TEMP_PRICE_HL_TABLE_NAME}
+                ON CONFLICT (s_code, td, interval) DO UPDATE SET
+                    hs_h = EXCLUDED.hs_h,
+                    hs_l = EXCLUDED.hs_l,
+                    d_hs_h = EXCLUDED.d_hs_h,
+                    d_hs_l = EXCLUDED.d_hs_l,
+                    chg_from_hs = EXCLUDED.chg_from_hs,
+                    pct_chg_from_hs = EXCLUDED.pct_chg_from_hs,
+                    tg_h = EXCLUDED.tg_h,
+                    tg_l = EXCLUDED.tg_l,
+                    d_tg_h = EXCLUDED.d_tg_h,
+                    d_tg_l = EXCLUDED.d_tg_l,
+                    chg_to_tg = EXCLUDED.chg_to_tg,
+                    pct_chg_to_tg = EXCLUDED.pct_chg_to_tg
+            """)
+            
+            conn.commit()
+            logger.info(f"Data from {csv_path} successfully loaded and updated into {PRICE_HL_TABLE_NAME}.")
+            
+            _cursor.close()
     except Exception as _e:
         conn.rollback()
         logger.error(f"Failed to load data from CSV: {_e}")
         raise AirflowException(_e)
-    finally:
-        if conn:
-            PGEngine.release_conn(conn)
-
-
 
 def insert_or_update_tracing_data(s_code: str, min_td: str, max_td: str):
     try:
-        conn = PGEngine.get_conn()
-        host_name = os.uname().nodename
-        logger.info(f'storing tracing data of s_code={s_code}, min_td={min_td}, max_td={max_td}')
-        with conn.cursor() as cursor:
-            sql = f"""
-                INSERT INTO {TRACING_TABLE_NAME} (s_code, min_td, max_td, host_name)
-                VALUES ('{s_code}', '{min_td}', '{max_td}', '{host_name}')
-                ON CONFLICT (s_code) DO UPDATE SET
-                min_td = EXCLUDED.min_td,
-                max_td = EXCLUDED.max_td,
-                host_name = EXCLUDED.host_name,
-                update_time = CURRENT_TIMESTAMP;
-            """
-            cursor.execute(sql)
-            conn.commit()
-        logger.info(f"Tracing data inserted/updated for s_code={s_code}.")
+        with PGEngine.managed_conn() as conn:
+            host_name = os.uname().nodename
+            logger.info(f'storing tracing data of s_code={s_code}, min_td={min_td}, max_td={max_td}')
+            with conn.cursor() as cursor:
+                sql = f"""
+                    INSERT INTO {TRACING_TABLE_NAME} (s_code, min_td, max_td, host_name)
+                    VALUES ('{s_code}', '{min_td}', '{max_td}', '{host_name}')
+                    ON CONFLICT (s_code) DO UPDATE SET
+                    min_td = EXCLUDED.min_td,
+                    max_td = EXCLUDED.max_td,
+                    host_name = EXCLUDED.host_name,
+                    update_time = CURRENT_TIMESTAMP;
+                """
+                cursor.execute(sql)
+                conn.commit()
+            logger.info(f"Tracing data inserted/updated for s_code={s_code}.")
     except Exception as e:
         logger.error(f"Failed to insert/update tracing data for s_code={s_code}: {str(e)}")
         raise AirflowException(e)
-    finally:
-        if conn:
-            PGEngine.release_conn(conn)
 
 def get_tracing_data(s_code: str) -> tuple:
     try:
         sql = f"""
             SELECT min_td, max_td FROM {TRACING_TABLE_NAME} WHERE s_code = '{s_code}';
         """
-        conn = PGEngine.get_conn()
-        with conn.cursor() as cursor:
-            cursor.execute(sql)
-            result = cursor.fetchone()
-            if result:
-                return result[0], result[1]
-            else:
-                return None, None
+        with PGEngine.managed_conn() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql)
+                result = cursor.fetchone()
+                if result:
+                    return result[0], result[1]
+                else:
+                    return None, None
     except Exception as e:
         logger.error(f"Failed to fetch tracing data for s_code={s_code}: {str(e)}")
         raise AirflowException(e)
-    finally:
-        if conn:
-            PGEngine.release_conn(conn)
 
 def generate_fibonacci_intervals(n: int) -> list[int]:
     fibs = [1, 2]

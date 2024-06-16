@@ -59,58 +59,51 @@ def fetch_yfinance_data(ticker: str, start_date: str, end_date: str) -> pd.DataF
     return df
 
 def insert_symbol_data_to_db(symbol_data_list: list[tuple[str, str, str, str, str, str, str, str, str, str]]):
-    conn = None
     try:
-        conn = PGEngine.get_conn()
-        with conn.cursor() as cursor:
-            sql = f"""
-                INSERT INTO {STOCK_SYMBOL_TABLE} (symbol, currency, description, displaySymbol, figi, isin, mic, shareClassFIGI, symbol2, type, create_time, update_time)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-                ON CONFLICT (symbol) DO UPDATE 
-                SET currency = EXCLUDED.currency,
-                    description = EXCLUDED.description,
-                    displaySymbol = EXCLUDED.displaySymbol,
-                    figi = EXCLUDED.figi,
-                    isin = EXCLUDED.isin,
-                    mic = EXCLUDED.mic,
-                    shareClassFIGI = EXCLUDED.shareClassFIGI,
-                    symbol2 = EXCLUDED.symbol2,
-                    type = EXCLUDED.type,
-                    update_time = EXCLUDED.update_time;
-            """
-            cursor.executemany(sql, symbol_data_list)
-            conn.commit()
-            logger.info(f"Symbol data inserted into {STOCK_SYMBOL_TABLE} successfully.")
+        with PGEngine.managed_conn() as conn:
+            with conn.cursor() as cursor:
+                sql = f"""
+                    INSERT INTO {STOCK_SYMBOL_TABLE} (symbol, currency, description, displaySymbol, figi, isin, mic, shareClassFIGI, symbol2, type, create_time, update_time)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                    ON CONFLICT (symbol) DO UPDATE 
+                    SET currency = EXCLUDED.currency,
+                        description = EXCLUDED.description,
+                        displaySymbol = EXCLUDED.displaySymbol,
+                        figi = EXCLUDED.figi,
+                        isin = EXCLUDED.isin,
+                        mic = EXCLUDED.mic,
+                        shareClassFIGI = EXCLUDED.shareClassFIGI,
+                        symbol2 = EXCLUDED.symbol2,
+                        type = EXCLUDED.type,
+                        update_time = EXCLUDED.update_time;
+                """
+                cursor.executemany(sql, symbol_data_list)
+                conn.commit()
+                logger.info(f"Symbol data inserted into {STOCK_SYMBOL_TABLE} successfully.")
     except Exception as e:
         logger.error(f"Failed to insert symbol data into {STOCK_SYMBOL_TABLE}: {e}")
         raise AirflowException(e)
-    finally:
-        if conn:
-            PGEngine.release_conn(conn)
 
 def update_tracing_table_bulk(updates: List[tuple]):
     conn = None
     try:
-        conn = PGEngine.get_conn()
         sql = f"""
-            INSERT INTO {TRACING_TABLE_NAME} (symbol, last_td, create_time, update_time, host_name)
-            VALUES %s
-            ON CONFLICT (symbol) DO UPDATE 
-            SET last_td = EXCLUDED.last_td, update_time = EXCLUDED.update_time, host_name = EXCLUDED.host_name;
-        """
+                INSERT INTO {TRACING_TABLE_NAME} (symbol, last_td, create_time, update_time, host_name)
+                VALUES %s
+                ON CONFLICT (symbol) DO UPDATE 
+                SET last_td = EXCLUDED.last_td, update_time = EXCLUDED.update_time, host_name = EXCLUDED.host_name;
+            """
         hostname = os.getenv('HOSTNAME', socket.gethostname())
         values = [(symbol, last_td, datetime.now(), datetime.now(), hostname) for symbol, last_td in updates]
 
-        with conn.cursor() as cursor:
-            psycopg2.extras.execute_values(cursor, sql, values)
-        conn.commit()
-        logger.info(f"Tracing data updated for {len(updates)} records in {TRACING_TABLE_NAME}.")
+        with PGEngine.managed_conn() as conn:
+            with conn.cursor() as cursor:
+                psycopg2.extras.execute_values(cursor, sql, values)
+            conn.commit()
+            logger.info(f"Tracing data updated for {len(updates)} records in {TRACING_TABLE_NAME}.")
     except Exception as e:
         logger.error(f"Failed to update tracing table in bulk: {e}")
         raise AirflowException(e)
-    finally:
-        if conn:
-            PGEngine.release_conn(conn)
 
 def update_trade_dates(conn, trade_dates):
     insert_date_sql = f"""
@@ -123,9 +116,7 @@ def update_trade_dates(conn, trade_dates):
     conn.commit()
 
 def prepare_arg_list():
-    conn = None
-    try:
-        conn = PGEngine.get_conn()
+    with PGEngine.managed_conn() as conn:
         tracing_df = dguf.get_tracing_data_df(conn, TRACING_TABLE_NAME)
         tracing_df['last_td'] = tracing_df['last_td'].apply(dguf.format_td10)
         tracing_dict = dict(zip(tracing_df['symbol'].values, tracing_df['last_td'].values))
@@ -147,71 +138,64 @@ def prepare_arg_list():
         redis_key = f"{ARG_LIST_CACHE_PREFIX}@{STOCK_DATA_KEY}"
         dguf.write_list_to_redis(redis_key, arg_list, task_cache_conn)
         logger.info(f"Argument list for {STOCK_DATA_KEY} has been prepared and cached.")
-    finally:
-        if conn:
-            PGEngine.release_conn(conn)
 
 def process_stock_data():
-    conn = None
     try:
-        conn = PGEngine.get_conn()
-        logger.info(f"Starting to save data for {STOCK_DATA_KEY}")
-        redis_key = f"{ARG_LIST_CACHE_PREFIX}@{STOCK_DATA_KEY}"
-        arg_list = dguf.read_list_from_redis(redis_key, task_cache_conn)
+        with PGEngine.managed_conn() as conn:
+            logger.info(f"Starting to save data for {STOCK_DATA_KEY}")
+            redis_key = f"{ARG_LIST_CACHE_PREFIX}@{STOCK_DATA_KEY}"
+            arg_list = dguf.read_list_from_redis(redis_key, task_cache_conn)
 
-        if not arg_list:
-            raise AirflowException(f"No arguments available for {STOCK_DATA_KEY}, skipping data fetch.")
+            if not arg_list:
+                raise AirflowException(f"No arguments available for {STOCK_DATA_KEY}, skipping data fetch.")
 
-        if DEBUG_MODE:
-            logger.debug(f"Config dictionary for {STOCK_DATA_KEY}: {ak_cols_config_dict}")
+            if DEBUG_MODE:
+                logger.debug(f"Config dictionary for {STOCK_DATA_KEY}: {ak_cols_config_dict}")
 
-        total_codes = len(arg_list)
-        all_data = []
-        total_rows = 0
-        all_trade_dates = set()
-        failed_stocks = []
+            total_codes = len(arg_list)
+            all_data = []
+            total_rows = 0
+            all_trade_dates = set()
+            failed_stocks = []
 
-        for index, (s_code, start_date, end_date) in enumerate(arg_list):
-            try:
-                logger.info(f'({index + 1}/{total_codes}) Fetching data for s_code={s_code} from {start_date} to {end_date}')
-                stock_data_df = fetch_yfinance_data(s_code, start_date, end_date)
+            for index, (s_code, start_date, end_date) in enumerate(arg_list):
+                try:
+                    logger.info(f'({index + 1}/{total_codes}) Fetching data for s_code={s_code} from {start_date} to {end_date}')
+                    stock_data_df = fetch_yfinance_data(s_code, start_date, end_date)
 
-                if not stock_data_df.empty:
-                    stock_data_df.rename(columns=dguf.get_col_dict(ak_cols_config_dict[STOCK_DATA_KEY]), inplace=True)
-                    stock_data_df['symbol'] = s_code
-                    stock_data_df['td'] = stock_data_df.index
-                    stock_data_df.reset_index(drop=True, inplace=True)
-                    if DEBUG_MODE:
-                        logger.debug(stock_data_df.head(3))
-                    all_data.append(stock_data_df)
-                    total_rows += len(stock_data_df)
-                    all_trade_dates.update(stock_data_df['td'].dt.strftime('%Y-%m-%d').unique())
-                    if DEBUG_MODE:
-                        logger.debug(f's_code={s_code}, len(stock_data_df)={len(stock_data_df)}, len(all_data)={len(all_data)}, total_rows={total_rows}')
-                else:
+                    if not stock_data_df.empty:
+                        stock_data_df.rename(columns=dguf.get_col_dict(ak_cols_config_dict[STOCK_DATA_KEY]), inplace=True)
+                        stock_data_df['symbol'] = s_code
+                        stock_data_df['td'] = stock_data_df.index
+                        stock_data_df.reset_index(drop=True, inplace=True)
+                        if DEBUG_MODE:
+                            logger.debug(stock_data_df.head(3))
+                        all_data.append(stock_data_df)
+                        total_rows += len(stock_data_df)
+                        all_trade_dates.update(stock_data_df['td'].dt.strftime('%Y-%m-%d').unique())
+                        if DEBUG_MODE:
+                            logger.debug(f's_code={s_code}, len(stock_data_df)={len(stock_data_df)}, len(all_data)={len(all_data)}, total_rows={total_rows}')
+                    else:
+                        failed_stocks.append(arg_list[index])
+
+                    if total_rows >= BATCH_SIZE or (index + 1) == total_codes:
+                        _combined_df = pd.concat(all_data, ignore_index=True)
+                        process_batch_data(_combined_df, all_trade_dates, conn)
+                        all_data = []
+                        total_rows = 0
+                        all_trade_dates.clear()
+
+                except Exception as e:
+                    logger.error(f"Failed to process data for s_code={s_code}: {e}")
                     failed_stocks.append(arg_list[index])
 
-                if total_rows >= BATCH_SIZE or (index + 1) == total_codes:
-                    _combined_df = pd.concat(all_data, ignore_index=True)
-                    process_batch_data(_combined_df, all_trade_dates, conn)
-                    all_data = []
-                    total_rows = 0
-                    all_trade_dates.clear()
-
-            except Exception as e:
-                logger.error(f"Failed to process data for s_code={s_code}: {e}")
-                failed_stocks.append(arg_list[index])
-
-        if failed_stocks:
-            dguf.write_list_to_redis(FAILED_STOCKS_CACHE_PREFIX, failed_stocks, task_cache_conn)
-            logger.info(f"Failed stocks: {failed_stocks}")
+            if failed_stocks:
+                dguf.write_list_to_redis(FAILED_STOCKS_CACHE_PREFIX, failed_stocks, task_cache_conn)
+                logger.info(f"Failed stocks: {failed_stocks}")
 
     except Exception as e:
         logger.error(f"Failed to process data for {STOCK_DATA_KEY}: {e}")
         raise AirflowException(e)
-    finally:
-        if conn:
-            PGEngine.release_conn(conn)
 
 def process_batch_data(combined_df, all_trade_dates, conn):
     if DEBUG_MODE:
