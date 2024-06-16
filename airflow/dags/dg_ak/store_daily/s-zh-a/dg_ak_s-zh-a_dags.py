@@ -250,7 +250,7 @@ def generate_dag(stock_func, period, adjust):
         'email': [con.DEFAULT_EMAIL],
         'email_on_failure': False,
         'email_on_retry': False,
-        'retries': 1,
+        'retries': con.DEFAULT_RETRIES,
         'retry_delay': timedelta(minutes=con.DEFAULT_RETRY_DELAY)
     }
 

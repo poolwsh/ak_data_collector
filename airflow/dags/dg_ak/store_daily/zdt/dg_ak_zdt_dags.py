@@ -89,7 +89,7 @@ def generate_dag(ak_func_name: str):
         'email': [con.DEFAULT_EMAIL],
         'email_on_failure': False,
         'email_on_retry': False,
-        'retries': con.RETRIES,
+        'retries': con.DEFAULT_RETRIES,
         'retry_delay': timedelta(minutes=con.DEFAULT_RETRY_DELAY)
     }
 

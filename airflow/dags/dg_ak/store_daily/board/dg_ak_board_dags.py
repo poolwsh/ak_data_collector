@@ -128,7 +128,7 @@ def generate_dag(board_list_func_name: str, board_cons_func_name: str):
         'email': [con.DEFAULT_EMAIL],
         'email_on_failure': False,
         'email_on_retry': False,
-        'retries': 1,
+        'retries': con.DEFAULT_RETRIES,
         'retry_delay': timedelta(minutes=con.DEFAULT_RETRY_DELAY)
     }
 

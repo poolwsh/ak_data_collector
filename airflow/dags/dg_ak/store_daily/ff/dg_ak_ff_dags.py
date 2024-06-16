@@ -221,14 +221,14 @@ def generate_dag_name(ak_func_name: str) -> str:
 def generate_dag(ak_func_name: str, task_func):
     logger.info(f"Generating DAG for {ak_func_name}")
     default_args = {
-        'owner': 'wsh',
+        'owner': con.DEFAULT_OWNER,
         'depends_on_past': False,
         'start_date': days_ago(1),
-        'email': ['wshmxgz@gmail.com'],
+        'email': [con.DEFAULT_EMAIL],
         'email_on_failure': False,
         'email_on_retry': False,
-        'retries': 1,
-        'retry_delay': timedelta(minutes=5),
+        'retries': con.DEFAULT_RETRIES,
+        'retry_delay': timedelta(minutes=con.DEFAULT_RETRY_DELAY),
     }
 
     dag_name = generate_dag_name(ak_func_name)
@@ -237,7 +237,7 @@ def generate_dag(ak_func_name: str, task_func):
         dag_name,
         default_args=default_args,
         description=f'利用akshare的函数{ak_func_name}下载资金流向相关数据',
-        schedule_interval='0 */8 * * *',  # 每8小时运行一次
+        schedule_interval='0 */8 * * *', 
         catchup=False,
         tags=['akshare', 'store_daily', '资金流向'],
         max_active_runs=1,
