@@ -313,8 +313,8 @@ def generate_dag(index_func, period):
         dag_name,
         default_args=default_args,
         description=f'利用akshare的函数{index_func}(period={period})下载指数行情相关数据',
-        start_date=days_ago(1),
-        schedule=dgakuf.generate_random_minute_schedule(hour=8), # 北京时间: 8+8=16
+        start_date=days_ago(0),
+        schedule=dgakuf.generate_random_minute_schedule(hour=8), 
         catchup=False,
         tags=['akshare', 'store_daily', '指数行情'],
         max_active_runs=1,

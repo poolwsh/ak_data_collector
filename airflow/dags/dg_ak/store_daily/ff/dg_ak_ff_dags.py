@@ -223,7 +223,7 @@ def generate_dag(ak_func_name: str, task_func):
     default_args = {
         'owner': con.DEFAULT_OWNER,
         'depends_on_past': False,
-        'start_date': days_ago(1),
+        'start_date': days_ago(0),
         'email': [con.DEFAULT_EMAIL],
         'email_on_failure': False,
         'email_on_retry': False,
@@ -237,7 +237,7 @@ def generate_dag(ak_func_name: str, task_func):
         dag_name,
         default_args=default_args,
         description=f'利用akshare的函数{ak_func_name}下载资金流向相关数据',
-        schedule_interval='0 */8 * * *', 
+        schedule_interval='0 */12 * * *', 
         catchup=False,
         tags=['akshare', 'store_daily', '资金流向'],
         max_active_runs=1,

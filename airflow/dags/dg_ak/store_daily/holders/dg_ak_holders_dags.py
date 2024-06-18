@@ -125,8 +125,8 @@ def generate_dag(ak_func_name: str):
         dag_name,
         default_args=default_args,
         description=f'利用akshare的函数{ak_func_name}下载股东相关数据',
-        start_date=days_ago(1),
-        schedule=dgakuf.generate_random_minute_schedule(hour=9), # 北京时间: 9+8=17
+        start_date=days_ago(0),
+        schedule=dgakuf.generate_random_minute_schedule(hour=9),
         catchup=False,
         tags=['akshare', 'store_daily', '股东人数'],
         max_active_runs=1,
