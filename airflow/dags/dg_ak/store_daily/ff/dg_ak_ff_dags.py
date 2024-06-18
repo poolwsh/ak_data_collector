@@ -42,7 +42,7 @@ def is_trading_day() -> str:
             return 'continue_task'
         else:
             return 'skip_task'
-
+        
 def update_tracing_by_scode_date_bulk(ak_func_name: str, updates: List[tuple]):
     conn = None
     try:
@@ -54,7 +54,7 @@ def update_tracing_by_scode_date_bulk(ak_func_name: str, updates: List[tuple]):
                 SET last_td = EXCLUDED.last_td, update_time = EXCLUDED.update_time, host_name = EXCLUDED.host_name;
             """
             hostname = os.getenv('HOSTNAME', socket.gethostname())
-            values = [(ak_func_name, s_code, last_td, datetime.now(), hostname) for s_code, last_td in updates]
+            values = [(ak_func_name, s_code, last_td, datetime.now(), datetime.now(), hostname) for s_code, last_td in updates]
 
             with conn.cursor() as cursor:
                 psycopg2.extras.execute_values(cursor, sql, values)
@@ -103,7 +103,8 @@ def get_stock_individual_fund_flow():
             data.dropna(inplace=True)
             data['s_code'] = _s_code
             data['td'] = data['td'].apply(dgakuf.format_td10)
-            data = dgakuf.convert_columns(data, f'dg_ak_{ak_func_name}', pg_conn, task_cache_conn)
+            with PGEngine.managed_conn() as conn:
+                data = dgakuf.convert_columns(data, f'dg_ak_{ak_func_name}', conn, task_cache_conn)
             all_data.append(data)
             total_rows += len(data)
 
