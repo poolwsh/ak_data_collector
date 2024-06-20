@@ -15,7 +15,7 @@ current_path = Path(__file__).resolve().parent
 project_root = os.path.abspath(os.path.join(current_path, '..', '..', '..'))
 sys.path.append(project_root)
 
-from dags.da_ak.utils.da_ak_util_funcs import DaAkUtilFuncs as dauf
+from dags.da_ak.utils.da_ak_util_funcs import DaAkUtilFuncs as daakuf
 from dags.utils.db import PGEngine, task_cache_conn
 from dags.utils.logger import logger
 from dags.da_ak.utils.da_ak_config import daak_config as con
@@ -23,7 +23,7 @@ from dags.da_ak.utils.da_ak_config import daak_config as con
 DEBUG_MODE = con.DEBUG_MODE
 
 PRICE_HL_TABLE_NAME = 'da_ak_stock_price_hl'
-TEMP_PRICE_HL_TABLE_NAME = 'da_ak_stock_price_hl'
+TEMP_PRICE_HL_TABLE_NAME = 'da_ak_stock_price_hl_temp'
 TRACING_TABLE_NAME = 'da_ak_tracing_stock_price_hl'
 MIN_INTERVAL = 3
 NONE_RESULT = 'NULL'
@@ -48,60 +48,6 @@ def get_stock_data(s_code: str) -> pd.DataFrame:
     except Exception as e:
         logger.error(f"Failed to fetch data for s_code={s_code}: {str(e)}")
         raise AirflowException(e)
-
-def clear_table(conn, table_name):
-    try:
-        _cursor = conn.cursor()
-        _cursor.execute(f"DELETE FROM {table_name}")
-        conn.commit()
-        logger.info(f"Table {table_name} cleared successfully.")
-        _cursor.close()
-    except Exception as _e:
-        conn.rollback()
-        logger.error(f"Failed to clear table {table_name}: {_e}")
-        raise AirflowException(_e)
-
-
-def insert_or_update_data_from_csv(csv_path):
-    if not os.path.exists(csv_path):
-        logger.error("CSV file does not exist.")
-        return
-    try:
-        with PGEngine.managed_conn() as conn:
-            _cursor = conn.cursor()
-    
-            clear_table(conn, TEMP_PRICE_HL_TABLE_NAME)
-
-            with open(csv_path, 'r') as _file:
-                _copy_sql = f"COPY {TEMP_PRICE_HL_TABLE_NAME} FROM STDIN WITH CSV HEADER DELIMITER ','"
-                _cursor.copy_expert(sql=_copy_sql, file=_file)
-
-            _cursor.execute(f"""
-                INSERT INTO {PRICE_HL_TABLE_NAME} 
-                SELECT * FROM {TEMP_PRICE_HL_TABLE_NAME}
-                ON CONFLICT (s_code, td, interval) DO UPDATE SET
-                    hs_h = EXCLUDED.hs_h,
-                    hs_l = EXCLUDED.hs_l,
-                    d_hs_h = EXCLUDED.d_hs_h,
-                    d_hs_l = EXCLUDED.d_hs_l,
-                    chg_from_hs = EXCLUDED.chg_from_hs,
-                    pct_chg_from_hs = EXCLUDED.pct_chg_from_hs,
-                    tg_h = EXCLUDED.tg_h,
-                    tg_l = EXCLUDED.tg_l,
-                    d_tg_h = EXCLUDED.d_tg_h,
-                    d_tg_l = EXCLUDED.d_tg_l,
-                    chg_to_tg = EXCLUDED.chg_to_tg,
-                    pct_chg_to_tg = EXCLUDED.pct_chg_to_tg
-            """)
-            
-            conn.commit()
-            logger.info(f"Data from {csv_path} successfully loaded and updated into {PRICE_HL_TABLE_NAME}.")
-            
-            _cursor.close()
-    except Exception as _e:
-        conn.rollback()
-        logger.error(f"Failed to load data from CSV: {_e}")
-        raise AirflowException(_e)
 
 def insert_or_update_tracing_data(s_code: str, min_td: str, max_td: str):
     try:
@@ -149,80 +95,6 @@ def generate_fibonacci_intervals(n: int) -> list[int]:
     intervals = [f for f in fibs if f >= MIN_INTERVAL and f < n]
     return intervals
 
-
-def process_and_store_data():
-    logger.info("Starting to process and store data.")
-    s_code_name_list = dauf.get_s_code_name_list(task_cache_conn)
-    if not DEBUG_MODE:
-        random.shuffle(s_code_name_list)
-    
-    for index, stock_code in enumerate(s_code_name_list):
-        logger.info(f"Processing {index + 1}/{len(s_code_name_list)}: {stock_code}")
-        s_code = stock_code[0]
-
-        min_td, max_td = get_tracing_data(s_code)
-
-        stock_data_df = get_stock_data(s_code)
-        if stock_data_df.empty:
-            logger.info(f"No stock data found for s_code {s_code}")
-            continue
-        
-        current_min_td, current_max_td = stock_data_df['td'].min(), stock_data_df['td'].max()
-
-        if min_td == current_min_td and max_td == current_max_td:
-            logger.info(f"Data for s_code {s_code} already processed. Skipping.")
-            continue
-
-        if DEBUG_MODE:
-            logger.debug(f"Fetched data for s_code {s_code}: \n{stock_data_df.head(3)}")
-
-        intervals = generate_fibonacci_intervals(len(stock_data_df))
-        price_hl_df = process_stock_data_internal(s_code, stock_data_df, intervals)
-
-        price_hl_df = price_hl_df.replace("NULL", "")
-        
-        csv_file_path = os.path.join(CSV_ROOT, f'{s_code}.csv')
-        price_hl_df.to_csv(csv_file_path, index=False)
-        insert_or_update_data_from_csv(csv_file_path)
-        if not DEBUG_MODE:
-            os.remove(csv_file_path)
-        insert_or_update_tracing_data(s_code, current_min_td, current_max_td)
-
-
-def process_stock_data_internal(s_code: str, stock_data_df: pd.DataFrame, intervals: list[int]) -> pd.DataFrame:
-    if not stock_data_df.empty:
-        stock_data_df['td'] = pd.to_datetime(stock_data_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
-        logger.info(f'Starting calculation for {s_code}.')
-        if DEBUG_MODE:
-            logger.debug(f"\nintervals={intervals}")
-        price_hl_df = calculate_price_hl(stock_data_df, intervals)
-        if DEBUG_MODE:
-            logger.debug(f"Processed data for s_code {s_code}: \n{price_hl_df.head(3)}")
-        return price_hl_df
-
-
-def calculate_price_hl(stock_data: pd.DataFrame, intervals: list[int]) -> pd.DataFrame:
-    s_code = stock_data['s_code'][0]
-    results = []
-    
-    stock_data_np = stock_data[['td', 'c', 's_code']].to_numpy()
-    dates = stock_data_np[:, 0]
-    prices = stock_data_np[:, 1].astype(float)
-    s_codes = stock_data_np[:, 2]
-
-    progress_bar = tqdm(range(len(prices)), desc="Calculating price HL")
-    for i in progress_bar:
-        for interval in intervals:
-            if i >= interval or i + interval < len(prices):
-                row = calculate_c(prices, i, interval, s_codes[i], dates[i])
-                if row:
-                    results.append(row)
-    
-    if DEBUG_MODE:
-        logger.debug(f"Calculated price HL for s_code={s_code}")
-    return pd.DataFrame(results)
-
-
 def calculate_c(prices: np.ndarray, i: int, interval: int, s_code: str, date: str) -> dict:
     historical_high = prices[i-interval:i].max() if i >= interval else None
     historical_low = prices[i-interval:i].min() if i >= interval else None
@@ -256,7 +128,76 @@ def calculate_c(prices: np.ndarray, i: int, interval: int, s_code: str, date: st
         'pct_chg_to_tg': round(pct_chg_to_tg, ROUND_N) if pct_chg_to_tg is not None else NONE_RESULT
     }
 
+def calculate_price_hl(stock_data: pd.DataFrame, intervals: list[int]) -> pd.DataFrame:
+    s_code = stock_data['s_code'][0]
+    results = []
+    
+    stock_data_np = stock_data[['td', 'c', 's_code']].to_numpy()
+    dates = stock_data_np[:, 0]
+    prices = stock_data_np[:, 1].astype(float)
+    s_codes = stock_data_np[:, 2]
 
+    progress_bar = tqdm(range(len(prices)), desc="Calculating price HL")
+    for i in progress_bar:
+        for interval in intervals:
+            if i >= interval or i + interval < len(prices):
+                row = calculate_c(prices, i, interval, s_codes[i], dates[i])
+                if row:
+                    results.append(row)
+    
+    if DEBUG_MODE:
+        logger.debug(f"Calculated price HL for s_code={s_code}")
+    return pd.DataFrame(results)
+
+def process_stock_data_internal(s_code: str, stock_data_df: pd.DataFrame, intervals: list[int]) -> pd.DataFrame:
+    if not stock_data_df.empty:
+        stock_data_df['td'] = pd.to_datetime(stock_data_df['td'], errors='coerce').dt.strftime('%Y-%m-%d')
+        logger.info(f'Starting calculation for {s_code}.')
+        if DEBUG_MODE:
+            logger.debug(f"\nintervals={intervals}")
+        price_hl_df = calculate_price_hl(stock_data_df, intervals)
+        if DEBUG_MODE:
+            logger.debug(f"Processed data for s_code {s_code}: \n{price_hl_df.head(3)}")
+        return price_hl_df
+    
+def process_and_store_data():
+    logger.info("Starting to process and store data.")
+    s_code_name_list = daakuf.get_s_code_name_list(task_cache_conn)
+    if not DEBUG_MODE:
+        random.shuffle(s_code_name_list)
+    
+    for index, stock_code in enumerate(s_code_name_list):
+        logger.info(f"Processing {index + 1}/{len(s_code_name_list)}: {stock_code}")
+        s_code = stock_code[0]
+
+        min_td, max_td = get_tracing_data(s_code)
+
+        stock_data_df = get_stock_data(s_code)
+        if stock_data_df.empty:
+            logger.info(f"No stock data found for s_code {s_code}")
+            continue
+        
+        current_min_td, current_max_td = stock_data_df['td'].min(), stock_data_df['td'].max()
+
+        if min_td == current_min_td and max_td == current_max_td:
+            logger.info(f"Data for s_code {s_code} already processed. Skipping.")
+            continue
+
+        if DEBUG_MODE:
+            logger.debug(f"Fetched data for s_code {s_code}: \n{stock_data_df.head(3)}")
+
+        intervals = generate_fibonacci_intervals(len(stock_data_df))
+        price_hl_df = process_stock_data_internal(s_code, stock_data_df, intervals)
+
+        price_hl_df = price_hl_df.replace("NULL", "")
+        
+        csv_file_path = os.path.join(CSV_ROOT, f'{s_code}.csv')
+        price_hl_df.to_csv(csv_file_path, index=False)
+        with PGEngine.managed_conn() as conn:
+            daakuf.insert_data_from_csv(conn, csv_file_path, PRICE_HL_TABLE_NAME, task_cache_conn)
+        if not DEBUG_MODE:
+            os.remove(csv_file_path)
+        insert_or_update_tracing_data(s_code, current_min_td, current_max_td)
 
 def generate_dag():
     default_args = {
@@ -269,21 +210,21 @@ def generate_dag():
         'retry_delay': timedelta(minutes=con.DEFAULT_RETRY_DELAY)
     }
 
-    dag_name = "股价高低点"
+    dag_name = "price_peak"
 
     dag = DAG(
         dag_name,
         default_args=default_args,
         description=f'计算股票历史高低点数据',
         start_date=days_ago(0),
-        schedule=dauf.generate_random_minute_schedule(hour=11),
+        schedule=daakuf.generate_random_minute_schedule(hour=11),
         catchup=False,
-        tags=['a-akshare', 'stock-price', 'horizontal'],
+        tags=['a-akshare', 'price-peak', 'horizontal'],
         max_active_runs=1,
     )
 
     process_and_store_data_task = PythonOperator(
-        task_id='process_and_store_data',
+        task_id='get_price_peak',
         python_callable=process_and_store_data,
         dag=dag,
     )
