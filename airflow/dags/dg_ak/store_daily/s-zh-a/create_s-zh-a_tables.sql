@@ -5,39 +5,36 @@
 
 
 CREATE TABLE dg_ak_stock_zh_a_hist_daily_bfq (
-    s_code VARCHAR(20) NOT NULL,    
-    td DATE NOT NULL,            
-    o FLOAT,                     
-    c FLOAT,                     
-    h FLOAT,                      
-    l FLOAT,                   
-    v BIGINT,                     
-    a NUMERIC(18, 2),             
-    amplitude FLOAT,              
-    pct_chg FLOAT,                
-    change FLOAT,                  
-    turnover_rate FLOAT,          
-    PRIMARY KEY (s_code, td)     
+    s_code VARCHAR(20) NOT NULL,    -- Stock code
+    td DATE NOT NULL,               -- Trade date
+    o FLOAT,                        -- Open price
+    c FLOAT,                        -- Close price
+    h FLOAT,                        -- Highest price
+    l FLOAT,                        -- Lowest price
+    v BIGINT,                       -- Volume of transactions
+    a NUMERIC(18, 2),               -- Amount of transactions
+    amplitude FLOAT,                -- Amplitude
+    pct_chg FLOAT,                  -- Percentage change
+    change FLOAT,                   -- Change amount
+    turnover_rate FLOAT,            -- Turnover rate
+    PRIMARY KEY (s_code, td)    
 );
 SELECT create_hypertable('dg_ak_stock_zh_a_hist_daily_bfq', 'td');
 
 
-
-
-
 CREATE TABLE dg_ak_stock_zh_a_hist_daily_hfq (
-    s_code VARCHAR(20) NOT NULL,    
-    td DATE NOT NULL,            
-    o FLOAT,                      
-    c FLOAT,                      
-    h FLOAT,                       
-    l FLOAT,                       
-    v BIGINT,                     
-    a NUMERIC(18, 2),              
-    amplitude FLOAT,              
-    pct_chg FLOAT,                
-    change FLOAT,                  
-    turnover_rate FLOAT,          
+    s_code VARCHAR(20) NOT NULL,    -- Stock code
+    td DATE NOT NULL,               -- Trade date
+    o FLOAT,                        -- Open price
+    c FLOAT,                        -- Close price
+    h FLOAT,                        -- Highest price
+    l FLOAT,                        -- Lowest price
+    v BIGINT,                       -- Volume of transactions
+    a NUMERIC(18, 2),               -- Amount of transactions
+    amplitude FLOAT,                -- Amplitude
+    pct_chg FLOAT,                  -- Percentage change
+    change FLOAT,                   -- Change amount
+    turnover_rate FLOAT,            -- Turnover rate
     PRIMARY KEY (s_code, td)    
 );
 SELECT create_hypertable('dg_ak_stock_zh_a_hist_daily_hfq', 'td');
