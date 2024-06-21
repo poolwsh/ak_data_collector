@@ -13,7 +13,7 @@ from dags.da_ak.utils.da_ak_config import daak_config as con
 from dags.utils.config import Config
 
 # Constants
-ROLLBACK_DAYS = 10  # Number of days to rollback for recalculating RS
+ROLLBACK_DAYS = 7  # Number of days to rollback for recalculating RS
 DEFAULT_INDEX_LIST = ['000001']  # Default list of index codes
 DAG_NAME = "calculate_and_sort_rs_daily"  # Name of the DAG
 
@@ -36,7 +36,6 @@ def get_dates(i_code):
                 start_dt = datetime.strptime(con.ZH_A_DEFAULT_START_DATE, "%Y-%m-%d").date()
             logger.info(f"Calculated date range for i_code {i_code}: {start_dt} to {end_dt}")
             return start_dt, end_dt
-
 
 def calculate_and_sort_rs(ds, **kwargs):
     """
@@ -126,7 +125,6 @@ def calculate_and_sort_rs(ds, **kwargs):
                     conn.rollback()
                     logger.error(f"Error inserting and ranking RS data for index code: {i_code} on {target_date}, error: {e}")
                     raise AirflowException(f"Error inserting and ranking RS data for index code: {i_code}")
-
 
 def generate_dag():
     """
