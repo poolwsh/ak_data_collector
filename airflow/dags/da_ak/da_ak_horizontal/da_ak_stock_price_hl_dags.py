@@ -216,7 +216,7 @@ def generate_dag():
         dag_name,
         default_args=default_args,
         description=f'计算股票历史高低点数据',
-        start_date=days_ago(0),
+        start_date=days_ago(1),
         schedule=daakuf.generate_random_minute_schedule(hour=11),
         catchup=False,
         tags=['a-akshare', 'price-peak', 'horizontal'],

@@ -10,4 +10,13 @@ CREATE TABLE da_ak_rs_daily (
 );
 SELECT create_hypertable('da_ak_rs_daily', 'td');
 
+CREATE TABLE da_ak_board_a_industry_em_daily (
+    td DATE NOT NULL,
+    b_name VARCHAR(255) NOT NULL,
+    a FLOAT,
+    a_pre FLOAT,
+    PRIMARY KEY (td, b_name)
+);
+SELECT create_hypertable('da_ak_board_a_industry_em_daily', 'td');
+
 

@@ -260,7 +260,7 @@ def generate_dag(stock_func, period, adjust):
         dag_name,
         default_args=default_args,
         description=f'利用akshare的函数{stock_func}(period={period}, adjust={adjust})下载个股行情相关数据',
-        start_date=days_ago(0),
+        start_date=days_ago(1),
         schedule=dgakuf.generate_random_minute_schedule(hour=8), 
         catchup=False,
         tags=['akshare', 'store_daily', '个股行情'],

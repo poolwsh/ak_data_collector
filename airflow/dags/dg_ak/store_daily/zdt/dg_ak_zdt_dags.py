@@ -99,7 +99,7 @@ def generate_dag(ak_func_name: str):
         dag_name,
         default_args=default_args,
         description=f'利用akshare的函数{ak_func_name}下载涨跌停相关数据',
-        start_date=days_ago(0),
+        start_date=days_ago(1),
         schedule=dgakuf.generate_random_minute_schedule(hour=9), 
         catchup=False,
         tags=['akshare', 'store_daily', '涨跌停'],

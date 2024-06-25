@@ -144,7 +144,7 @@ def generate_dag():
         DAG_NAME,
         default_args=default_args,
         description='Calculate and sort relative strength daily',
-        start_date=days_ago(0),
+        start_date=days_ago(1),
         schedule_interval=dauf.generate_random_minute_schedule(hour=10),
         catchup=False,
         tags=['a-akshare', 'rs', 'vertical'],

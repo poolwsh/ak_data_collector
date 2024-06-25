@@ -254,7 +254,7 @@ def generate_dag(stock_func):
         dag_name,
         default_args=default_args,
         description=f'利用yfinance的函数{stock_func}下载美股行情相关数据',
-        start_date=days_ago(0),
+        start_date=days_ago(1),
         schedule=dguf.generate_random_minute_schedule(hour=12), 
         catchup=False,
         tags=['yfinance', 'store_daily', '美股行情'],

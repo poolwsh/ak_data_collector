@@ -125,7 +125,7 @@ def generate_dag(board_list_func_name: str, board_cons_func_name: str):
     default_args = {
         'owner': con.DEFAULT_OWNER,
         'depends_on_past': False,
-        'start_date': days_ago(0),
+        'start_date': days_ago(1),
         'email': [con.DEFAULT_EMAIL],
         'email_on_failure': False,
         'email_on_retry': False,
