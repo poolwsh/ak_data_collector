@@ -12,26 +12,13 @@ from dags.utils.db import PGEngine, task_cache_conn
 from dags.utils.logger import logger
 from dags.da_ak.utils.da_ak_config import daak_config as con
 from dags.da_ak.utils.da_ak_util_funcs import DaAkUtilFuncs as daakuf
-from dags.utils.config import Config
 
 # Constants
 ROLLBACK_DAYS = 7  # Number of days to rollback for recalculating fund data
 BATCH_DAYS = 25
-DAG_NAME = "da_ak_board_a_dag"  # Name of the DAG
+DAG_NAME = "da_ak_board_i_em_a_dag"  # Name of the DAG
 
-def get_begin_end_date():
-    with PGEngine.managed_conn() as conn:
-        with conn.cursor() as cursor:
-            # 获取表中最大交易日期
-            cursor.execute("SELECT MAX(td) FROM da_ak_board_a_industry_em_daily")
-            result = cursor.fetchone()
-            end_dt = datetime.now().date()  # 结束日期为今天
-            if result[0]:
-                start_dt = result[0] - timedelta(days=ROLLBACK_DAYS)
-            else:
-                start_dt = datetime.strptime(con.ZH_A_DEFAULT_START_DATE, "%Y-%m-%d").date()
-            logger.info(f"Calculated date range: {start_dt} to {end_dt}")
-            return start_dt, end_dt
+
 
 def get_stock_df(start_dt, end_dt):
     logger.info(f"Fetching data from {start_dt} to {end_dt}")
@@ -113,7 +100,7 @@ def calculate_board_fund_data(ds, **kwargs):
     """
     Calculate fund data for boards and insert into the database.
     """
-    start_dt, end_dt = get_begin_end_date()
+    start_dt, end_dt = daakuf.get_begin_end_date(ROLLBACK_DAYS)
     logger.info(end_dt)
     batch_size = timedelta(days=BATCH_DAYS)
     current_start_dt = start_dt
@@ -151,7 +138,7 @@ def generate_dag():
     dag = DAG(
         DAG_NAME,
         default_args=default_args,
-        description='Calculate and sort fund data for boards daily',
+        description='Calculate and sort fund data for em industry boards daily',
         start_date=days_ago(1),
         schedule_interval='0 10 * * *',
         catchup=False,
@@ -161,7 +148,7 @@ def generate_dag():
 
     # Define the task to calculate and sort fund data
     calculate_and_sort_fund_data_task = PythonOperator(
-        task_id='calculate_board_a',
+        task_id='board_i_em_a',
         python_callable=calculate_board_fund_data,
         provide_context=True,
         dag=dag,
