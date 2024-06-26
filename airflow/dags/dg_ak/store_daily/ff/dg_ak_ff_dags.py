@@ -1,213 +1,285 @@
+from __future__ import annotations
+
 import os
 import sys
-from pathlib import Path
-from datetime import datetime, timedelta
+from typing import List
+import socket
 import pandas as pd
-from airflow import DAG
-from airflow.operators.python_operator import PythonOperator
+from pathlib import Path
+from datetime import timedelta, datetime
+from airflow.models.dag import DAG
+from airflow.operators.python import PythonOperator, BranchPythonOperator
+from airflow.operators.dummy import DummyOperator
 from airflow.utils.dates import days_ago
 from airflow.exceptions import AirflowException
+import akshare as ak
+import psycopg2.extras
+
+from dags.dg_ak.utils.dg_ak_util_funcs import DgAkUtilFuncs as dgakuf
 from dags.utils.db import PGEngine, task_cache_conn
 from dags.utils.logger import logger
-from dags.da_ak.utils.da_ak_config import daak_config as con
-from dags.utils.config import Config
+from dags.dg_ak.utils.dg_ak_config import dgak_config as con
 
-# Constants
-ROLLBACK_DAYS = 7  # Number of days to rollback for recalculating fund data
-DAG_NAME = "da_ak_board_a_dag"  # Name of the DAG
+DEBUG_MODE = con.DEBUG_MODE
 
-def get_dates():
+config_path = Path(__file__).resolve().parent / 'dg_ak_ff_config.py'
+sys.path.append(config_path.parent.as_posix())
+ak_cols_config_dict = dgakuf.load_ak_cols_config(config_path.as_posix())
+
+TRACING_TABLE_NAME_BY_SCODE_DATE = 'dg_ak_tracing_by_scode_date'
+
+with PGEngine.managed_conn() as conn:
+    td_list = dgakuf.get_trade_dates(conn)
+
+if DEBUG_MODE and td_list and len(td_list)>0:
+        today = max(td_list).strftime('%Y-%m-%d')
+else:
+    today = datetime.now().strftime('%Y-%m-%d')
+
+def is_trading_day() -> str:
     with PGEngine.managed_conn() as conn:
-        with conn.cursor() as cursor:
-            # 获取表中最大交易日期
-            cursor.execute("SELECT MAX(td) FROM da_ak_board_ff_industry_em_daily")
-            result = cursor.fetchone()
-            end_dt = datetime.now().date()  # 结束日期为今天
-            if result[0]:
-                start_dt = result[0] - timedelta(days=ROLLBACK_DAYS)
-            else:
-                start_dt = datetime.strptime(con.ZH_A_DEFAULT_START_DATE, "%Y-%m-%d").date()
-            logger.info(f"Calculated date range: {start_dt} to {end_dt}")
-            return start_dt, end_dt
+        if dgakuf.is_trading_day(conn, date=datetime.strptime(today, '%Y-%m-%d').date()):
+            return 'continue_task'
+        else:
+            return 'skip_task'
+        
+def update_tracing_by_scode_date_bulk(ak_func_name: str, updates: List[tuple]):
+    conn = None
+    try:
+        with PGEngine.managed_conn() as conn:
+            sql = f"""
+                INSERT INTO {TRACING_TABLE_NAME_BY_SCODE_DATE} (ak_func_name, scode, last_td, create_time, update_time, host_name)
+                VALUES %s
+                ON CONFLICT (ak_func_name, scode) DO UPDATE 
+                SET last_td = EXCLUDED.last_td, update_time = EXCLUDED.update_time, host_name = EXCLUDED.host_name;
+            """
+            hostname = os.getenv('HOSTNAME', socket.gethostname())
+            values = [(ak_func_name, s_code, last_td, datetime.now(), datetime.now(), hostname) for s_code, last_td in updates]
 
-def calculate_ma(series, window):
-    """
-    Calculate the moving average for a specified column over a given window.
-    """
-    return series.rolling(window=window).mean()
+            with conn.cursor() as cursor:
+                psycopg2.extras.execute_values(cursor, sql, values)
+            conn.commit()
+            logger.info(f"Tracing data updated for {len(updates)} records in {TRACING_TABLE_NAME_BY_SCODE_DATE}.")
+    except Exception as e:
+        logger.error(f"Failed to update tracing table in bulk: {e}")
+        raise AirflowException(e)
 
-
-def merge_board_and_stock_data(board_comp_df, stock_data_df):
-    """
-    合并板块成分数据和个股交易数据。
-
-    参数:
-    board_comp_df (pd.DataFrame): 板块成分数据的 DataFrame。
-    stock_data_df (pd.DataFrame): 个股交易数据的 DataFrame。
-
-    返回:
-    pd.DataFrame: 合并后的 DataFrame。
-    """
-    # 将所有日期列转换为datetime类型
-    board_comp_df['td'] = pd.to_datetime(board_comp_df['td'])
-    stock_data_df['td'] = pd.to_datetime(stock_data_df['td'])
-
-    # 确保没有重复标签并填充缺失的板块成分数据
-    board_comp_df = board_comp_df.drop_duplicates(subset=['td', 'b_name', 's_code'])
-    logger.debug(f"Board composition dataframe after removing duplicates: \n{board_comp_df.head()}")
-
-    trading_days = stock_data_df['td'].drop_duplicates().sort_values()
-
-    # 创建一个完整的 DataFrame 包含所有日期和板块名称
-    complete_df = pd.MultiIndex.from_product([trading_days, board_comp_df['b_name'].unique()], names=['td', 'b_name']).to_frame(index=False)
-    logger.debug(f"Complete dataframe with all dates and board names: \n{complete_df.head()}")
-
-    # 合并完整的日期和板块 DataFrame 与原始板块成分 DataFrame
-    board_comp_df = pd.merge(complete_df, board_comp_df, on=['td', 'b_name'], how='left')
-    board_comp_df = board_comp_df.groupby('b_name').apply(lambda group: group.ffill()).reset_index(drop=True)
-    logger.debug(f"Board composition dataframe after forward fill: \n{board_comp_df.head()}")
-
-    # 合并板块成分和个股交易数据
-    merged_df = pd.merge(board_comp_df, stock_data_df, on=['s_code', 'td'], how='inner')
-    logger.debug(f"Merged dataframe with board composition and stock data: \n{merged_df.head()}")
-
-    return merged_df
-
-
-def calculate_fund_metrics(merged_df):
-    """
-    计算板块的资金和相关指标。
-
-    参数:
-    merged_df (pd.DataFrame): 合并后的 DataFrame。
-
-    返回:
-    pd.DataFrame: 计算结果的 DataFrame。
-    """
-    # 按板块名称和日期分组，然后汇总交易金额
-    board_fund_df = merged_df.groupby(['td', 'b_name']).agg({'a': 'sum'}).reset_index()
-    logger.debug(f"Total {len(board_fund_df)} board fund dataframe: \n{board_fund_df.head()}")
-
-    # 计算每天的市场总交易金额
-    total_market_df = board_fund_df.groupby('td').agg({'a': 'sum'}).reset_index()
-    total_market_df.rename(columns={'a': 'total_market_a'}, inplace=True)
-    logger.debug(f"Total {len(total_market_df)} market dataframe: \n{total_market_df.head()}")
-
-    # 合并市场总数据和板块资金数据
-    board_fund_df = pd.merge(board_fund_df, total_market_df, on='td', how='inner')
-    logger.debug(f"Board fund dataframe after merging with total market data: \n{board_fund_df.head()}")
-
-    # 计算每个板块的交易金额占市场总交易金额的百分比
-    board_fund_df['a_pre'] = board_fund_df['a'] / board_fund_df['total_market_a']
-    logger.debug(f"Board fund dataframe with percentage of total market: \n{board_fund_df.head()}")
-
-    # 计算移动平均值
-    for window in [5, 8, 13, 34, 55, 144, 233]:
-        ma_column = f'a_pre_ma{window}'
-        board_fund_df[ma_column] = board_fund_df.groupby('b_name')['a_pre'].transform(lambda x: calculate_ma(x, window))
-        logger.debug(f"Board fund dataframe with {ma_column}: \n{board_fund_df[[ma_column]].dropna().head()}")
-
-    return board_fund_df
-
-
-def calculate_board_fund_data(ds, **kwargs):
-    """
-    Calculate fund data for boards and insert into the database.
-    """
-    begin_dt, end_dt = get_dates()  # 计算开始和结束日期
-    logger.info(f"Calculating fund data for boards from {begin_dt} to {end_dt}")
+def process_batch_data(ak_func_name: str, df: pd.DataFrame):
+    temp_csv_path = dgakuf.save_data_to_csv(df, f'{ak_func_name}')
+    if temp_csv_path is None:
+        raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
 
     with PGEngine.managed_conn() as conn:
-        with conn.cursor() as cursor:
-            # 获取板块成分数据
-            cursor.execute("""
-                SELECT td, b_name, s_code
-                FROM dg_ak_stock_board_industry_cons_em
-                WHERE td BETWEEN %s AND %s
-            """, (begin_dt, end_dt))
-            board_composition = cursor.fetchall()
-            logger.debug(f"Fetched {len(board_composition)} board composition data: \n{board_composition[:5]}")
+        dgakuf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}', task_cache_conn)
 
-            # 获取个股交易数据
-            cursor.execute("""
-                SELECT s_code, td, a
-                FROM dg_ak_stock_zh_a_hist_daily_hfq
-                WHERE td BETWEEN %s AND %s
-            """, (begin_dt, end_dt))
-            stock_data = cursor.fetchall()
-            logger.debug(f"Fetched {len(stock_data)} stock data: \n{stock_data[:5]}")
+    last_td = df['td'].max()
+    updates = [(_s_code, last_td) for _s_code in df['s_code'].unique()]
+    update_tracing_by_scode_date_bulk(ak_func_name, updates)
 
-    board_comp_df = pd.DataFrame(board_composition, columns=['td', 'b_name', 's_code'])
-    stock_data_df = pd.DataFrame(stock_data, columns=['s_code', 'td', 'a'])
+def get_stock_individual_fund_flow():
+    ak_func_name = "stock_individual_fund_flow"
+    BATCH_SIZE = 5000
+    logger.info("Fetching stock individual fund flow data")
+    s_code_list = dgakuf.get_s_code_list(task_cache_conn)
+    total_codes = len(s_code_list)
+    all_data = []
+    total_rows = 0
 
-    # 调用合并函数
-    merged_df = merge_board_and_stock_data(board_comp_df, stock_data_df)
+    for _index, _s_code in enumerate(s_code_list):
+        try:
+            logger.info(f'({_index + 1}/{total_codes}) downloading data with s_code={_s_code}')
+            ak_func = getattr(ak, ak_func_name)
+            if not ak_func:
+                raise AirflowException(f"Function {ak_func_name} not found in akshare.")
 
-    # 调用计算函数
-    board_fund_df = calculate_fund_metrics(merged_df)
+            market = 'sh' if _s_code.startswith('6') else 'sz' if _s_code.startswith(('0', '3')) else 'bj' if _s_code.startswith(('4', '8')) else None
+            data = dgakuf.try_to_call(ak_func, {'stock': _s_code, 'market': market})
+            if data is None or data.empty:
+                logger.warning(f"No data found for s_code {_s_code} using function {ak_func_name}. It may indicate that the stock is newly listed.")
+                continue
 
-    # 插入结果到数据库
+            data = dgakuf.remove_cols(data, ak_cols_config_dict[ak_func_name])
+            data.rename(columns=dgakuf.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
+            data.dropna(inplace=True)
+            data['s_code'] = _s_code
+            data['td'] = data['td'].apply(dgakuf.format_td10)
+            with PGEngine.managed_conn() as conn:
+                data = dgakuf.convert_columns(data, f'dg_ak_{ak_func_name}', conn, task_cache_conn)
+            all_data.append(data)
+            total_rows += len(data)
+
+            if total_rows >= BATCH_SIZE or (_index + 1) == total_codes:
+                combined_df = pd.concat(all_data, ignore_index=True)
+                process_batch_data(ak_func_name, combined_df)
+                all_data = []
+                total_rows = 0
+        except Exception as e:
+            logger.error(f"Failed to fetch data for s_code {_s_code} using function {ak_func_name}: {str(e)}")
+            continue
+
+def store_tracing_ak_data_today(ak_data_df, ak_func_name):
     with PGEngine.managed_conn() as conn:
-        with conn.cursor() as cursor:
-            for index, row in board_fund_df.iterrows():
-                try:
-                    cursor.execute("""
-                        INSERT INTO da_ak_board_ff_industry_em_daily (td, b_name, a, a_pre, a_pre_ma5, a_pre_ma8, a_pre_ma13, a_pre_ma34, a_pre_ma55, a_pre_ma144, a_pre_ma233)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (td, b_name)
-                        DO UPDATE SET
-                            a = EXCLUDED.a,
-                            a_pre = EXCLUDED.a_pre,
-                            a_pre_ma5 = EXCLUDED.a_pre_ma5,
-                            a_pre_ma8 = EXCLUDED.a_pre_ma8,
-                            a_pre_ma13 = EXCLUDED.a_pre_ma13,
-                            a_pre_ma34 = EXCLUDED.a_pre_ma34,
-                            a_pre_ma55 = EXCLUDED.a_pre_ma55,
-                            a_pre_ma144 = EXCLUDED.a_pre_ma144,
-                            a_pre_ma233 = EXCLUDED.a_pre_ma233;
-                    """, (row['td'], row['b_name'], row['a'], row['a_pre'], row['a_pre_ma5'], row['a_pre_ma8'], row['a_pre_ma13'], row['a_pre_ma34'], row['a_pre_ma55'], row['a_pre_ma144'], row['a_pre_ma233']))
-                    conn.commit()
-                except Exception as e:
-                    conn.rollback()
-                    logger.error(f"Error inserting/updating data for {row['td']}, {row['b_name']}: {e}")
-                    raise AirflowException(f"Error inserting/updating data for {row['td']}, {row['b_name']}")
+        ak_data_df = dgakuf.convert_columns(ak_data_df, f'dg_ak_{ak_func_name}', conn, task_cache_conn)
+        temp_csv_path = dgakuf.save_data_to_csv(ak_data_df, f'{ak_func_name}')
+        if temp_csv_path is None:
+            raise AirflowException(f"No CSV file created for {ak_func_name}, skipping database insertion.")
+        dgakuf.insert_data_from_csv(conn, temp_csv_path, f'dg_ak_{ak_func_name}', task_cache_conn)
+        dgakuf.insert_tracing_date_data(conn, ak_func_name, today)
 
+def get_stock_individual_fund_flow_rank():
+    ak_func_name = "stock_individual_fund_flow_rank"
+    ak_data_df = dgakuf.try_to_call(lambda: ak.stock_individual_fund_flow_rank(indicator="今日"))
+    ak_data_df = dgakuf.remove_cols(ak_data_df, ak_cols_config_dict[ak_func_name])
+    ak_data_df.rename(columns=dgakuf.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
+    ak_data_df['td'] = today
+    store_tracing_ak_data_today(ak_data_df, ak_func_name)
 
+def get_stock_market_fund_flow():
+    ak_func_name = "stock_market_fund_flow"
+    ak_data_df = dgakuf.get_data_by_none(ak_func_name, ak_cols_config_dict)
+    store_tracing_ak_data_today(ak_data_df, ak_func_name)
 
-def generate_dag():
-    """
-    Generate the Airflow DAG with the default arguments.
-    """
+def get_stock_sector_fund_flow_rank():
+    ak_func_name = 'stock_sector_fund_flow_rank'
+    sectors = ["行业资金流", "概念资金流", "地域资金流"]
+    all_data = []
+    for sector in sectors:
+        data = dgakuf.try_to_call(lambda: ak.stock_sector_fund_flow_rank(indicator='今日', sector_type=sector))
+        if data is not None:
+            data = dgakuf.remove_cols(data, ak_cols_config_dict[ak_func_name])
+            data.rename(columns=dgakuf.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
+            data['sector_type'] = sector
+            all_data.append(data)
+    if all_data:
+        combined_df = pd.concat(all_data, ignore_index=True)
+        combined_df['td'] = today
+        store_tracing_ak_data_today(combined_df, ak_func_name)
+
+def get_stock_main_fund_flow():
+    ak_func_name = 'stock_main_fund_flow'
+    ak_data_df = dgakuf.try_to_call(lambda: ak.stock_main_fund_flow(symbol="全部股票"))
+    ak_data_df = dgakuf.remove_cols(ak_data_df, ak_cols_config_dict[ak_func_name])
+    ak_data_df.rename(columns=dgakuf.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
+    ak_data_df['td'] = today
+    int_columns = ['today_rank', 'rank_5day', 'rank_10day']  
+    for col in int_columns:
+        if col in ak_data_df.columns:
+            logger.debug(f'convert {col} type to int')
+            ak_data_df[col] = ak_data_df[col].astype('Int64')
+    store_tracing_ak_data_today(ak_data_df, ak_func_name)
+
+def get_stock_sector_fund_flow_summary():
+    ak_func_name = 'stock_sector_fund_flow_summary'
+    with PGEngine.managed_conn() as conn:
+        b_names, actual_date  = dgakuf.get_b_names_by_date(conn, "dg_ak_stock_board_industry_name_em", today)
+    if actual_date is not today:
+        logger.warning(f'Get b_names by {actual_date}(today is {today}).')
+    all_data = []
+    len_b_names = len(b_names)
+
+    for index, b_name in enumerate(b_names):
+        logger.info(f'({index + 1}/{len_b_names}) downloading data with b_name={b_name}')
+        data = dgakuf.try_to_call(lambda: ak.stock_sector_fund_flow_summary(symbol=b_name, indicator='今日'))
+        if data is not None:
+            data = dgakuf.remove_cols(data, ak_cols_config_dict[ak_func_name])
+            data.rename(columns=dgakuf.get_col_dict(ak_cols_config_dict[ak_func_name]), inplace=True)
+            data['b_name'] = b_name
+            all_data.append(data)
+    if all_data:
+        combined_df = pd.concat(all_data, ignore_index=True)
+        combined_df['td'] = today
+        store_tracing_ak_data_today(combined_df, ak_func_name)
+
+def get_sector_f_hist(ak_func_name, b_name_table_name):
+    with PGEngine.managed_conn() as conn:
+        b_names, actual_date = dgakuf.get_b_names_by_date(conn, b_name_table_name, today)
+    if actual_date is not today:
+        logger.warning(f'Get b_names by {actual_date}(today is {today}).')
+    b_con_df = dgakuf.get_data_by_board_names(ak_func_name, ak_cols_config_dict, b_names)
+    store_tracing_ak_data_today(b_con_df, ak_func_name)
+
+def get_stock_sector_fund_flow_hist():
+    get_sector_f_hist("stock_sector_fund_flow_hist", "dg_ak_stock_board_industry_name_em")
+
+def get_stock_concept_fund_flow_hist():
+    get_sector_f_hist("stock_concept_fund_flow_hist", "dg_ak_stock_board_concept_name_em")
+
+ak_func_name_mapping = {
+    'stock_individual_fund_flow': ('个股资金流向', '东方财富'),
+    'stock_individual_fund_flow_rank': ('个股资金流排名', '东方财富'),
+    'stock_market_fund_flow': ('大盘资金流向', '东方财富'),
+    'stock_sector_fund_flow_rank': ('行业资金流排名', '东方财富'),
+    'stock_main_fund_flow': ('主力资金流', '东方财富'),
+    'stock_sector_fund_flow_summary': ('行业资金流概况', '东方财富'),
+    'stock_sector_fund_flow_hist': ('行业历史资金流', '东方财富'),
+    'stock_concept_fund_flow_hist': ('概念历史资金流', '东方财富')
+}
+
+def generate_dag_name(ak_func_name: str) -> str:
+    description, source = ak_func_name_mapping.get(ak_func_name, (ak_func_name, ak_func_name))
+    return f'资金流向-{description}-{source}'
+
+def generate_dag(ak_func_name: str, task_func):
+    logger.info(f"Generating DAG for {ak_func_name}")
     default_args = {
         'owner': con.DEFAULT_OWNER,
         'depends_on_past': False,
+        'start_date': days_ago(0),
         'email': [con.DEFAULT_EMAIL],
         'email_on_failure': False,
         'email_on_retry': False,
         'retries': con.DEFAULT_RETRIES,
-        'retry_delay': timedelta(minutes=con.DEFAULT_RETRY_DELAY)
+        'retry_delay': timedelta(minutes=con.DEFAULT_RETRY_DELAY),
     }
 
+    dag_name = generate_dag_name(ak_func_name)
+
     dag = DAG(
-        DAG_NAME,
+        dag_name,
         default_args=default_args,
-        description='Calculate and sort fund data for boards daily',
-        start_date=days_ago(1),
-        schedule_interval='0 10 * * *',
+        description=f'利用akshare的函数{ak_func_name}下载资金流向相关数据',
+        schedule_interval='0 */12 * * *', 
         catchup=False,
-        tags=['a-akshare', 'fund', 'board'],
+        tags=['akshare', 'store_daily', '资金流向'],
         max_active_runs=1,
     )
 
-    # Define the task to calculate and sort fund data
-    calculate_and_sort_fund_data_task = PythonOperator(
-        task_id='calculate_and_sort_fund_data',
-        python_callable=calculate_board_fund_data,
-        provide_context=True,
-        dag=dag,
-    )
+    with dag:
+        check_trading_day = BranchPythonOperator(
+            task_id='check_trading_day',
+            python_callable=is_trading_day,
+            provide_context=True,
+        )
+
+        continue_task = DummyOperator(task_id='continue_task')
+        skip_task = DummyOperator(task_id='skip_task')
+
+        get_data_task = PythonOperator(
+            task_id=f'get_data_{ak_func_name}',
+            python_callable=task_func,
+            dag=dag,
+        )
+
+        check_trading_day >> continue_task >> get_data_task
+        check_trading_day >> skip_task
 
     return dag
 
-# Instantiate the DAG
-globals()[DAG_NAME] = generate_dag()
+ak_func_name_list = {
+    'stock_individual_fund_flow': get_stock_individual_fund_flow,
+    'stock_individual_fund_flow_rank': get_stock_individual_fund_flow_rank,
+    'stock_market_fund_flow': get_stock_market_fund_flow,
+    'stock_sector_fund_flow_rank': get_stock_sector_fund_flow_rank,
+    'stock_main_fund_flow': get_stock_main_fund_flow,
+    'stock_sector_fund_flow_summary': get_stock_sector_fund_flow_summary,
+    'stock_sector_fund_flow_hist': get_stock_sector_fund_flow_hist,
+    'stock_concept_fund_flow_hist': get_stock_concept_fund_flow_hist
+}
+
+for func_name, task_func in ak_func_name_list.items():
+    try:
+        dag_name = f'dg_ak_ff_{func_name}'
+        globals()[dag_name] = generate_dag(func_name, task_func)
+        logger.info(f"DAG for {dag_name} successfully created and registered.")
+    except Exception as e:
+        logger.error(f"Failed to create DAG for {func_name}: {str(e)}")
