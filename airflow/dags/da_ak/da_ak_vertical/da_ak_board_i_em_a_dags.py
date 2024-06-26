@@ -17,6 +17,7 @@ from dags.da_ak.utils.da_ak_util_funcs import DaAkUtilFuncs as daakuf
 ROLLBACK_DAYS = 7  # Number of days to rollback for recalculating fund data
 BATCH_DAYS = 25
 DAG_NAME = "da_ak_board_i_em_a_dag"  # Name of the DAG
+TABLE_NAME = "da_ak_board_a_industry_em_daily"
 
 
 
@@ -24,7 +25,6 @@ def get_stock_df(start_dt, end_dt):
     logger.info(f"Fetching data from {start_dt} to {end_dt}")
     with PGEngine.managed_conn() as conn:
         with conn.cursor() as cursor:
-            # 获取个股交易数据
             cursor.execute("""
                 SELECT s_code, td, a
                 FROM dg_ak_stock_zh_a_hist_daily_hfq
@@ -39,7 +39,6 @@ def get_board_df(start_dt, end_dt):
     logger.info(f"Fetching data from {start_dt} to {end_dt}")
     with PGEngine.managed_conn() as conn:
         with conn.cursor() as cursor:
-            # 获取板块成分数据
             cursor.execute("""
                 SELECT td, b_name, s_code
                 FROM dg_ak_stock_board_industry_cons_em
@@ -60,29 +59,26 @@ def calculate_a_pre_ma(board_a_df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: DataFrame with calculated percentages and moving averages.
     """
-    # 计算每天的市场总交易金额
     total_market_df = board_a_df.groupby('td').agg({'a': 'sum'}).reset_index()
     total_market_df.rename(columns={'a': 'total_market_a'}, inplace=True)
     logger.debug(f"Total {len(total_market_df)} market dataframe: \n{total_market_df.head()}")
 
-    # 合并市场总数据和板块资金数据
     board_fund_df = pd.merge(board_a_df, total_market_df, on='td', how='inner')
     logger.debug(f"Board fund dataframe after merging with total market data: \n{board_fund_df.head()}")
 
-    # 计算每个板块的交易金额占市场总交易金额的百分比
-    board_fund_df['a_pre'] = board_fund_df['a'] / board_fund_df['total_market_a']
+    filtered_df = board_fund_df[(board_fund_df['a'] != 0) & (board_fund_df['total_market_a'] != 0)]
+    filtered_df['a_pre'] = filtered_df['a'] / filtered_df['total_market_a']
     logger.debug(f"Board fund dataframe with percentage of total market: \n{board_fund_df.head()}")
 
-    return board_fund_df
+    return filtered_df
 
 def save_board_a_df(board_a_pre_df):
-    # 插入结果到数据库
     with PGEngine.managed_conn() as conn:
         with conn.cursor() as cursor:
             for index, row in board_a_pre_df.iterrows():
                 try:
-                    cursor.execute("""
-                        INSERT INTO da_ak_board_a_industry_em_daily (td, b_name, a, a_pre)
+                    cursor.execute(f"""
+                        INSERT INTO {TABLE_NAME} (td, b_name, a, a_pre)
                         VALUES (%s, %s, %s, %s)
                         ON CONFLICT (td, b_name)
                         DO UPDATE SET
@@ -100,7 +96,7 @@ def calculate_board_fund_data(ds, **kwargs):
     """
     Calculate fund data for boards and insert into the database.
     """
-    start_dt, end_dt = daakuf.get_begin_end_date(ROLLBACK_DAYS)
+    start_dt, end_dt = daakuf.get_begin_end_date(ROLLBACK_DAYS, TABLE_NAME)
     logger.info(end_dt)
     batch_size = timedelta(days=BATCH_DAYS)
     current_start_dt = start_dt
@@ -118,7 +114,6 @@ def calculate_board_fund_data(ds, **kwargs):
             board_a_pre_df = calculate_a_pre_ma(board_a_df)
             save_board_a_df(board_a_pre_df)
 
-        # 更新当前处理开始日期
         current_start_dt = current_end_dt + timedelta(days=1)
 
 def generate_dag():
