@@ -224,7 +224,7 @@ def generate_dag(ak_func_name: str, task_func):
     default_args = {
         'owner': con.DEFAULT_OWNER,
         'depends_on_past': False,
-        'start_date': days_ago(0),
+        'start_date': days_ago(1),
         'email': [con.DEFAULT_EMAIL],
         'email_on_failure': False,
         'email_on_retry': False,
