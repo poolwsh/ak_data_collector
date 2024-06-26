@@ -6,11 +6,9 @@ import numpy as np
 import pandas as pd
 import akshare as ak
 from io import BytesIO
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from airflow.exceptions import AirflowException
 from typing import Optional
-import psycopg2.extensions
-from psycopg2 import sql
 
 from utils.utils import UtilTools
 from utils.config import config as con

@@ -2,9 +2,9 @@ import os
 import sys
 import numpy as np
 import pandas as pd
-import datetime
+from datetime import datetime, timedelta, date
 from pathlib import Path
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, List
 import logging
 
 current_path = Path(__file__).resolve().parent 
@@ -13,6 +13,7 @@ sys.path.append(project_root)
 
 from dags.da_ak.utils.da_ak_config import daak_config as con
 from dags.utils.dg_utils import AkUtilTools
+from dags.utils.db import PGEngine
 from utils.logger import logger
 
 from airflow.exceptions import AirflowException
@@ -37,7 +38,7 @@ class DaAkUtilFuncs(AkUtilTools):
         return series.rolling(window=window).mean()
 
     @staticmethod
-    def gen_board_cons_dict(board_data: pd.DataFrame) -> Dict[datetime.date, Dict[str, List[str]]]:
+    def gen_board_cons_dict(board_data: pd.DataFrame) -> Dict[date, Dict[str, List[str]]]:
         """
         Process board constituent information.
         
@@ -45,7 +46,7 @@ class DaAkUtilFuncs(AkUtilTools):
             board_data (pd.DataFrame): DataFrame containing board data with 'td', 'b_name', and 's_code' columns.
         
         Returns:
-            Dict[datetime.date, Dict[str, List[str]]]: Dictionary with dates as keys and dictionaries of board names and stock codes as values.
+            Dict[date, Dict[str, List[str]]]: Dictionary with dates as keys and dictionaries of board names and stock codes as values.
         """
         board_cons = {}
         grouped = board_data.groupby('td')
@@ -67,7 +68,7 @@ class DaAkUtilFuncs(AkUtilTools):
     @staticmethod
     def calculate_grouped_value_by_date(
         df: pd.DataFrame,
-        group_dict: Dict[datetime.date, Dict[str, List[str]]],
+        group_dict: Dict[date, Dict[str, List[str]]],
         func: Callable[[np.ndarray], float],
         index_col: str,
         value_col: str,
@@ -78,7 +79,7 @@ class DaAkUtilFuncs(AkUtilTools):
         
         Args:
             df (pd.DataFrame): DataFrame containing the data.
-            group_dict (Dict[datetime.date, Dict[str, List[str]]]): Dictionary with group information.
+            group_dict (Dict[date, Dict[str, List[str]]]): Dictionary with group information.
             func (Callable[[np.ndarray], float]): Function to apply to each group.
             index_col (str): Column name to use as the index for grouping.
             value_col (str): Column name to use as the values for the function.
@@ -87,12 +88,12 @@ class DaAkUtilFuncs(AkUtilTools):
         Returns:
             pd.DataFrame: DataFrame with the grouped and calculated values.
         """
-        def _col_value(_traverse_values: List[datetime.date], _use_latest: bool) -> List[pd.DataFrame]:
+        def _col_value(_traverse_values: List[date], _use_latest: bool) -> List[pd.DataFrame]:
             """
             Apply the function to the specified date range.
             
             Args:
-                _traverse_values (List[datetime.date]): List of dates to traverse.
+                _traverse_values (List[date]): List of dates to traverse.
                 _use_latest (bool): Whether to use the latest available group information.
             
             Returns:
@@ -130,7 +131,7 @@ class DaAkUtilFuncs(AkUtilTools):
         # Debug log for group_dict keys before converting
         logger.debug(f'Original group_dict keys: {list(group_dict.keys())}')
 
-        # Ensure group_dict keys are of datetime.date type
+        # Ensure group_dict keys are of date type
         group_dict = {pd.to_datetime(k).date(): v for k, v in group_dict.items()}
 
         # Debug log for group_dict keys after converting
@@ -187,3 +188,18 @@ class DaAkUtilFuncs(AkUtilTools):
         # 将结果转换为 DataFrame
         result_df = pd.DataFrame(list(result.items()), columns=result_columns)
         return result_df
+
+    @staticmethod
+    def get_begin_end_date(rollback_days, table_name):
+        with PGEngine.managed_conn() as conn:
+            with conn.cursor() as cursor:
+                # 获取表中最大交易日期
+                cursor.execute(f"SELECT MAX(td) FROM {table_name}")
+                result = cursor.fetchone()
+                end_dt = datetime.now().date()  # 结束日期为今天
+                if result[0]:
+                    start_dt = result[0] - timedelta(days=rollback_days)
+                else:
+                    start_dt = datetime.strptime(con.ZH_A_DEFAULT_START_DATE, "%Y-%m-%d").date()
+                logger.info(f"Calculated date range: {start_dt} to {end_dt}")
+                return start_dt, end_dt

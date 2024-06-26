@@ -18,6 +18,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 
 from dags.utils.dg_utils import AkUtilTools
+from dags.utils.db import PGEngine
 from utils.logger import logger
 from dags.dg_ak.utils.dg_ak_config import dgak_config as con
 
@@ -492,3 +493,17 @@ class DgAkUtilFuncs(AkUtilTools):
         # Return the list of distinct b_name values and the actual date used for the query
         return [row[0] for row in results], actual_date  # Include the actual date in the return value
 
+    @staticmethod
+    def get_begin_end_date(rollback_days):
+        with PGEngine.managed_conn() as conn:
+            with conn.cursor() as cursor:
+                # 获取表中最大交易日期
+                cursor.execute("SELECT MAX(td) FROM da_ak_board_a_industry_em_daily")
+                result = cursor.fetchone()
+                end_dt = datetime.now().date()  # 结束日期为今天
+                if result[0]:
+                    start_dt = result[0] - timedelta(days=rollback_days)
+                else:
+                    start_dt = datetime.strptime(con.ZH_A_DEFAULT_START_DATE, "%Y-%m-%d").date()
+                logger.info(f"Calculated date range: {start_dt} to {end_dt}")
+                return start_dt, end_dt
