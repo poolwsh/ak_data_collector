@@ -95,53 +95,87 @@ def generate_fibonacci_intervals(n: int) -> list[int]:
     intervals = [f for f in fibs if f >= MIN_INTERVAL and f < n]
     return intervals
 
-def calculate_c(prices: np.ndarray, i: int, interval: int, s_code: str, date: str) -> dict:
-    historical_high = prices[i-interval:i].max() if i >= interval else None
-    historical_low = prices[i-interval:i].min() if i >= interval else None
-    distance_historical_high = i - np.argmax(prices[i-interval:i]) if historical_high is not None else None
-    distance_historical_low = i - np.argmin(prices[i-interval:i]) if historical_low is not None else None
-    change_from_historical = prices[i] - historical_high if historical_high and prices[i] >= historical_high else (prices[i] - historical_low if historical_low else None)
-    pct_chg_from_historical = change_from_historical / historical_high if historical_high and prices[i] >= historical_high else (change_from_historical / historical_low if historical_low else None)
+def calculate_c(prices: np.ndarray, i: int, interval: int, s_code: str, tds: np.array) -> dict:
+    historical_prices = prices[i-interval:i+1] if i >= interval else np.array([])
+    if historical_prices.size == 0:
+        historical_high = None
+        historical_low = None
+        distance_historical_high = None
+        distance_historical_low = None
+        td_historical_high = None
+        td_historical_low = None
+        chg_hl_historical = None
+        pct_chg_hl_historical = None
+    else:
+        historical_high = historical_prices.max()
+        historical_low = historical_prices.min()
+        distance_historical_high = interval - np.argmax(historical_prices)
+        distance_historical_low = interval - np.argmin(historical_prices)
+        td_historical_high = tds[i - distance_historical_high]
+        td_historical_low = tds[i - distance_historical_low]
+        historical_factor = -1 if distance_historical_high > distance_historical_low else 1
+        chg_hl_historical = historical_factor * (historical_high - historical_low)
+        pct_chg_hl_historical = historical_factor * (historical_high / historical_low)
 
-    target_high = prices[i:i+interval].max() if i + interval <= len(prices) else None
-    target_low = prices[i:i+interval].min() if i + interval <= len(prices) else None
-    distance_target_high = np.argmax(prices[i:i+interval]) if target_high is not None else None
-    distance_target_low = np.argmin(prices[i:i+interval]) if target_low is not None else None
-    change_to_target = target_high - prices[i] if target_high is not None else (target_low - prices[i] if target_low is not None else None)
-    pct_chg_to_tg = change_to_target / prices[i] if change_to_target is not None else None
+    target_prices = prices[i:i+interval] if i + interval <= len(prices) else np.array([])
+    if target_prices.size == 0:
+        target_high = None
+        target_low = None
+        distance_target_high = None
+        distance_target_low = None
+        td_target_high = None
+        td_target_low = None
+        chg_hl_target = None
+        pct_chg_hl_target = None
+    else:
+        target_high = target_prices.max()
+        target_low = target_prices.min()
+        distance_target_high = np.argmax(target_prices)
+        distance_target_low = np.argmin(target_prices)
+        td_target_high = tds[i + distance_target_high]
+        td_target_low = tds[i + distance_target_low]
+        target_factor = -1 if distance_target_low > distance_target_high else 1
+        chg_hl_target = target_factor * (target_high - target_low)
+        pct_chg_hl_target = target_factor * (target_high / target_low)
 
     return {
         's_code': s_code,
-        'td': date,
+        'td': tds[i],
         'interval': interval,
+        'c': prices[i],
+
         'hs_h': round(historical_high, ROUND_N) if historical_high is not None else NONE_RESULT,
         'hs_l': round(historical_low, ROUND_N) if historical_low is not None else NONE_RESULT,
         'd_hs_h': distance_historical_high if distance_historical_high is not None else NONE_RESULT,
         'd_hs_l': distance_historical_low if distance_historical_low is not None else NONE_RESULT,
-        'chg_from_hs': round(change_from_historical, ROUND_N) if change_from_historical is not None else NONE_RESULT,
-        'pct_chg_from_hs': round(pct_chg_from_historical, ROUND_N) if pct_chg_from_historical is not None else NONE_RESULT,
+        'td_hs_h': td_historical_high if td_historical_high is not None else NONE_RESULT,
+        'td_hs_l': td_historical_low if td_historical_low is not None else NONE_RESULT,
+        'chg_hl_hs': round(chg_hl_historical, ROUND_N) if chg_hl_historical is not None else NONE_RESULT,
+        'pct_chg_hl_hs': round(pct_chg_hl_historical, ROUND_N) if pct_chg_hl_historical is not None else NONE_RESULT,
+
         'tg_h': round(target_high, ROUND_N) if target_high is not None else NONE_RESULT,
         'tg_l': round(target_low, ROUND_N) if target_low is not None else NONE_RESULT,
         'd_tg_h': distance_target_high if distance_target_high is not None else NONE_RESULT,
         'd_tg_l': distance_target_low if distance_target_low is not None else NONE_RESULT,
-        'chg_to_tg': round(change_to_target, ROUND_N) if change_to_target is not None else NONE_RESULT,
-        'pct_chg_to_tg': round(pct_chg_to_tg, ROUND_N) if pct_chg_to_tg is not None else NONE_RESULT
+        'td_tg_h': td_target_high if td_target_high is not None else NONE_RESULT,
+        'td_tg_l': td_target_low if td_target_low is not None else NONE_RESULT,
+        'chg_hl_tg': round(chg_hl_target, ROUND_N) if chg_hl_target is not None else NONE_RESULT,
+        'pct_chg_hl_tg': round(pct_chg_hl_target, ROUND_N) if pct_chg_hl_target is not None else NONE_RESULT
     }
 
 def calculate_price_hl(stock_data: pd.DataFrame, intervals: list[int]) -> pd.DataFrame:
     s_code = stock_data['s_code'][0]
     results = []
     
-    stock_data_np = stock_data[['td', 'c', 's_code']].to_numpy()
+    stock_data_np = stock_data[['td', 'c']].to_numpy()
     dates = stock_data_np[:, 0]
     prices = stock_data_np[:, 1].astype(float)
-    s_codes = stock_data_np[:, 2]
 
     progress_bar = tqdm(range(len(prices)), desc="Calculating price HL")
     for i in progress_bar:
         for interval in intervals:
             if i >= interval or i + interval < len(prices):
-                row = calculate_c(prices, i, interval, s_codes[i], dates[i])
+                row = calculate_c(prices, i, interval, s_code, dates)
                 if row:
                     results.append(row)
     

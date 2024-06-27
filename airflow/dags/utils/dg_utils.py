@@ -9,6 +9,8 @@ from io import BytesIO
 from datetime import date, datetime, timedelta
 from airflow.exceptions import AirflowException
 from typing import Optional
+from psycopg2 import sql
+
 
 from utils.utils import UtilTools
 from utils.config import config as con
