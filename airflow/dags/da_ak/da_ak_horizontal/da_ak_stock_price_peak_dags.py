@@ -244,7 +244,7 @@ def generate_dag():
         'retry_delay': timedelta(minutes=con.DEFAULT_RETRY_DELAY)
     }
 
-    dag_name = "price_peak"
+    dag_name = "sp_peak"
 
     dag = DAG(
         dag_name,
@@ -258,12 +258,12 @@ def generate_dag():
     )
 
     process_and_store_data_task = PythonOperator(
-        task_id='get_price_peak',
+        task_id='price_peak',
         python_callable=process_and_store_data,
         dag=dag,
     )
 
     return dag
 
-globals()['dg_ak_price_hl'] = generate_dag()
+globals()['ak_sp_peak'] = generate_dag()
 
