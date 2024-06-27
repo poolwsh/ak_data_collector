@@ -1,6 +1,6 @@
 
 
-CREATE TABLE da_ak_stock_price_hl (
+CREATE TABLE da_ak_stock_price_peak (
     s_code VARCHAR(20) NOT NULL,        -- Stock code
     td DATE NOT NULL,                   -- Trade date
     interval INT NOT NULL,              -- Time interval
@@ -23,5 +23,5 @@ CREATE TABLE da_ak_stock_price_hl (
     pct_chg_hl_tg FLOAT,
     PRIMARY KEY (s_code, td, interval)  -- Composite primary key: stock code, trade date, and interval
 );
-SELECT create_hypertable('da_ak_stock_price_hl', 'td');
+SELECT create_hypertable('da_ak_stock_price_peak', 'td');
 

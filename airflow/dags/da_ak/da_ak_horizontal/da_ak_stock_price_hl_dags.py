@@ -22,9 +22,9 @@ from dags.da_ak.utils.da_ak_config import daak_config as con
 
 DEBUG_MODE = con.DEBUG_MODE
 
-PRICE_HL_TABLE_NAME = 'da_ak_stock_price_hl'
-TEMP_PRICE_HL_TABLE_NAME = 'da_ak_stock_price_hl_temp'
-TRACING_TABLE_NAME = 'da_ak_tracing_stock_price_hl'
+PRICE_HL_TABLE_NAME = 'da_ak_stock_price_peak'
+TEMP_PRICE_HL_TABLE_NAME = 'da_ak_stock_price_peak_temp'
+TRACING_TABLE_NAME = 'da_ak_tracing_stock_price_peak'
 MIN_INTERVAL = 3
 NONE_RESULT = 'NULL'
 ROUND_N = 5

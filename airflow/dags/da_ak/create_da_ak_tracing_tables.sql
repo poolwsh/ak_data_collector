@@ -1,6 +1,6 @@
 
 
-CREATE TABLE da_ak_tracing_stock_price_hl (
+CREATE TABLE da_ak_tracing_stock_price_peak (
     s_code VARCHAR NOT NULL,          -- Stock code
     min_td DATE NOT NULL,             -- Calculated minimum trade date
     max_td DATE NOT NULL,             -- Calculated maximum trade date
